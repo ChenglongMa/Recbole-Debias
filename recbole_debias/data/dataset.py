@@ -18,6 +18,7 @@ class DebiasDataset(Dataset):
 
         self.pscore_method = config['pscore_method']
         self.eta = config['eta']
+        self.device = config['device']
 
     def estimate_pscore(self):
         r"""
@@ -46,4 +47,4 @@ class DebiasDataset(Dataset):
 
         pscore_cnt_full = pow(pscore_cnt_full / pscore_cnt_full.max(), self.eta)
         pscore_cnt = pscore_cnt_full
-        return pscore_cnt, column
+        return pscore_cnt.to(self.device), column

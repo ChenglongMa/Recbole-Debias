@@ -6,6 +6,7 @@
 import logging
 from logging import getLogger
 
+import torch
 from recbole.utils import init_logger, init_seed, set_color
 from recbole_debias.config import Config
 from recbole_debias.data import create_dataset, data_preparation
@@ -25,6 +26,8 @@ def run_recbole_debias(model=None, dataset=None, config_file_list=None, config_d
     """
     # configurations initialization
     config = Config(model=model, dataset=dataset, config_file_list=config_file_list, config_dict=config_dict)
+    if config['single_spec']:
+        config['device'] = torch.device("cuda") if config['use_gpu'] and torch.cuda.is_available() else torch.device("cpu")
     init_seed(config['seed'], config['reproducibility'])
     # logger initialization
     init_logger(config)
