@@ -1,0 +1,22 @@
+embedding_size: 64
+dis_loss: 'L1'
+dis_pen: 0.01
+int_weight: 0.1
+pop_weight: 0.1
+adaptive: False
+decay: 0.9
+
+hidden_size: 128                # (int) The number of features in the hidden state.
+num_layers: 1                   # (int) The number of layers in GRU.
+dropout_prob: 0.3               # (float) The dropout rate.
+loss_type: 'CE'                 # (str) The type of loss function. Range in ['BPR', 'CE'].
+
+MASK_FIELD: mask
+
+# refer to https://recbole.io/docs/user_guide/config/training_settings.html
+train_neg_sample_args:          # (dict) Negative sampling configuration for model training.
+  distribution: popularity      # (str) The distribution of negative items.
+  sample_num: 2                 # (int) The sampled num of negative items.
+  alpha: 1.0                    # (float) The power of sampling probability for popularity distribution.
+  dynamic: False                # (bool) Whether to use dynamic negative sampling.
+  candidate_num: 0              # (int) The number of candidate negative items when dynamic negative sampling.

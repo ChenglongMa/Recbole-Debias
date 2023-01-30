@@ -36,9 +36,9 @@ class DICEDataloader(TrainDataLoader):
         self.neg_sample_args = neg_sample_args
         self.times = 1
         if (
-            self.neg_sample_args["distribution"] == "uniform"
-            or "popularity"
-            and self.neg_sample_args["sample_num"] != "none"
+                self.neg_sample_args["distribution"] == "uniform"
+                or "popularity"
+                and self.neg_sample_args["sample_num"] != "none"
         ):
             self.neg_sample_num = self.neg_sample_args["sample_num"]
 
@@ -71,8 +71,8 @@ class DICEDataloader(TrainDataLoader):
                 )
 
         elif (
-            self.neg_sample_args["distribution"] != "none"
-            and self.neg_sample_args["sample_num"] != "none"
+                self.neg_sample_args["distribution"] != "none"
+                and self.neg_sample_args["sample_num"] != "none"
         ):
             raise ValueError(
                 f'`neg_sample_args` [{self.neg_sample_args["distribution"]}] is not supported!'
@@ -101,20 +101,20 @@ class DICEDataloader(TrainDataLoader):
             self.model.train()
             return self._neg_sample_by_pair_wise_sampling(inter_feat, neg_item_ids, mask)
         elif (
-            self.neg_sample_args["distribution"] != "none"
-            and self.neg_sample_args["sample_num"] != "none"
+                self.neg_sample_args["distribution"] != "none"
+                and self.neg_sample_args["sample_num"] != "none"
         ):
             user_ids = inter_feat[self.uid_field].numpy()
             item_ids = inter_feat[self.iid_field].numpy()
             # neg_item_ids [user_ids.size()*neg_ratio]   mask [True,False.....]
             neg_item_ids, mask = self._sampler.sample_by_user_ids(
                 user_ids, item_ids, self.neg_sample_num
-            ) # 更改
+            )  # 更改
             return self._neg_sample_by_pair_wise_sampling(inter_feat, neg_item_ids, mask)
         else:
             return inter_feat
 
-    def _neg_sample_by_pair_wise_sampling(self, inter_feat, neg_item_ids, mask):
+    def _neg_sample_by_pair_wise_sampling(self, inter_feat: Interaction, neg_item_ids, mask):
         inter_feat = inter_feat.repeat(self.times)
         neg_item_feat = Interaction({self.iid_field: neg_item_ids})
         neg_item_mask = Interaction({self.mask_field: mask})
@@ -125,7 +125,7 @@ class DICEDataloader(TrainDataLoader):
         inter_feat.update(neg_item_mask)
         return inter_feat
 
-    def _neg_sample_by_point_wise_sampling(self, inter_feat, neg_item_ids):
+    def _neg_sample_by_point_wise_sampling(self, inter_feat: Interaction, neg_item_ids):
         pos_inter_num = len(inter_feat)
         new_data = inter_feat.repeat(self.times)
         new_data[self.iid_field][pos_inter_num:] = neg_item_ids

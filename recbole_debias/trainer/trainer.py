@@ -3,21 +3,10 @@
 # @Author : Jingsen Zhang
 # @Email  : zhangjingsen@ruc.edu.cn
 
-import os
-from logging import getLogger
 from time import time
-import numpy as np
-from tqdm import tqdm
-from torch.nn.utils.clip_grad import clip_grad_norm_
-import torch
-import torch.optim as optim
 
-from recbole.data.interaction import Interaction
-from recbole.data.dataloader import FullSortEvalDataLoader
-from recbole.evaluator import Evaluator, Collector
 from recbole.trainer import Trainer
-from recbole.utils import ensure_dir, get_local_time, early_stopping, calculate_valid_score, dict2str, \
-    EvaluatorType, get_tensorboard, set_color, get_gpu_usage, WandbLogger
+from recbole.utils import early_stopping, dict2str, set_color
 
 DebiasTrainer = Trainer
 
@@ -120,8 +109,10 @@ class DICETrainer(DebiasTrainer):
 
                 valid_step += 1
 
+            # mcl: added for DICE
             if self.config['adaptive']:
                 self.adapt_hyperparams()
+            # end of addition
 
         self._add_hparam_to_tensorboard(self.best_valid_score)
         return self.best_valid_score, self.best_valid_result

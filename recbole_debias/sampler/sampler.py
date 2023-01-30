@@ -42,6 +42,9 @@ class DICESampler(AbstractSampler):
         super().__init__(distribution=distribution, alpha=alpha)
 
     def _get_candidates_list(self):
+        """
+        Copy from class Sampler(AbstractSampler)
+        """
         candidates_list = []
         for dataset in self.datasets:
             candidates_list.extend(dataset.inter_feat[self.iid_field].numpy())
@@ -49,6 +52,7 @@ class DICESampler(AbstractSampler):
 
     def get_used_ids(self):
         """
+        Copy from class Sampler(AbstractSampler)
         Returns:
             dict: Used item_ids is the same as positive item_ids.
             Key is phase, and value is a numpy.ndarray which index is user_id, and element is a set of item_ids.
@@ -71,7 +75,10 @@ class DICESampler(AbstractSampler):
         return used_item_id
 
     def set_phase(self, phase):
-        """Get the sampler of corresponding phase.
+        """
+        Copy from class Sampler(AbstractSampler)
+
+        Get the sampler of corresponding phase.
 
         Args:
             phase (str): The phase of new sampler.
@@ -88,7 +95,12 @@ class DICESampler(AbstractSampler):
         return new_sampler
 
     def sample_by_user_ids(self, user_ids, item_ids, num):
-        """Sampling by user_ids.
+        """
+        -------------
+        Copy from class Sampler(AbstractSampler)
+        This one added `item_ids`
+        -------------
+        Sampling by user_ids.
 
         Args:
             user_ids (numpy.ndarray or list): Input user_ids.
@@ -126,34 +138,34 @@ class DICESampler(AbstractSampler):
         key_ids = np.array(key_ids)
         key_num = len(key_ids)
         total_num = key_num * num
-        item_ids_repeat = np.tile(item_ids, num)
+        item_ids_repeat = np.tile(item_ids, num)  # mcl: added
 
         if (key_ids == key_ids[0]).all():
             key_id = key_ids[0]
             used = np.array(list(self.used_ids[key_id]))
-            value_ids, pop_mask_ids = self.sampling(total_num, item_ids_repeat)
+            value_ids, pop_mask_ids = self.sampling(total_num, item_ids_repeat)  # mcl: added
             check_list = np.arange(total_num)[np.isin(value_ids, used)]
             while len(check_list) > 0:
-                value, pop_mask = self.sampling(len(check_list), item_ids_repeat[check_list])
+                value, pop_mask = self.sampling(len(check_list), item_ids_repeat[check_list])  # mcl: added
                 value_ids[check_list] = value
-                pop_mask_ids[check_list] = pop_mask_ids
+                pop_mask_ids[check_list] = pop_mask_ids  # TODO: pop_mask?
                 mask = np.isin(value, used)
                 check_list = check_list[mask]
         else:
             value_ids = np.zeros(total_num, dtype=np.int64)
-            pop_mask_ids = np.zeros(total_num, dtype=bool)
+            pop_mask_ids = np.zeros(total_num, dtype=bool)  # mcl: added
             check_list = np.arange(total_num)
             key_ids = np.tile(key_ids, num)
             while len(check_list) > 0:
                 value_ids[check_list], pop_mask_ids[check_list] = self.sampling(len(check_list),
-                                                                                item_ids_repeat[check_list])  # size一致
+                                                                                item_ids_repeat[check_list])  # size一致   # mcl: added
                 check_list = np.array([
                     i for i, used, v in zip(check_list, self.used_ids[key_ids[check_list]], value_ids[check_list])
                     if v in used
                 ])
-        return torch.tensor(value_ids), torch.tensor(pop_mask_ids)
+        return torch.tensor(value_ids), torch.tensor(pop_mask_ids)  # mcl: added
 
-    def sampling(self, sample_num, item_ids_repeat):
+    def sampling(self, sample_num, positive_item_ids):
         """Sampling [sample_num] item_ids.
 
         Args:
@@ -163,11 +175,11 @@ class DICESampler(AbstractSampler):
             sample_list (np.array): a list of samples and the len is [sample_num].
         """
         if self.distribution == 'popularity':
-            return self._pop_sampling(sample_num, item_ids_repeat)
+            return self._pop_sampling(sample_num, positive_item_ids)
         else:
             raise NotImplementedError(f'The sampling distribution [{self.distribution}] is not implemented.')
 
-    def _pop_sampling(self, sample_num, item_ids_repeat):
+    def _pop_sampling(self, sample_num, positive_item_ids):
         """Sample [sample_num] items in the popularity-biased distribution.
 
         Args:
@@ -181,6 +193,31 @@ class DICESampler(AbstractSampler):
         random_index_list = np.random.randint(0, len(keys), sample_num)  # 随机产生total个item_id [1,2,3,4....]
 
         final_random_list = keys[random_index_list]
-        pop_mask_list = np.array([self.prob[i] for i in item_ids_repeat]) >= np.array([self.prob[i] for i in final_random_list])
+        pop_mask_list = np.array([self.prob[i] for i in positive_item_ids]) >= np.array([self.prob[i] for i in final_random_list])
 
         return final_random_list, pop_mask_list
+
+    def sample_neg_sequence(self, pos_sequence):
+        """
+        -------------------
+        Copy from class SeqSampler(AbstractSampler)
+        -------------------
+        For each moment, sampling one item from all the items except the one the user clicked on at that moment.
+
+        Args:
+            pos_sequence (torch.Tensor):  all users' item history sequence, with the shape of `(N, )`.
+
+        Returns:
+            torch.tensor : all users' negative item history sequence.
+
+        """
+        total_num = len(pos_sequence)
+        value_ids = np.zeros(total_num, dtype=np.int64)
+        pop_mask_ids = np.zeros(total_num, dtype=bool)  # mcl: added
+        check_list = np.arange(total_num)
+        while len(check_list) > 0:
+            value_ids[check_list], pop_mask_ids[check_list] = self.sampling(len(check_list), pos_sequence[check_list])  # mcl: added
+            check_index = np.where(value_ids[check_list] == pos_sequence[check_list])
+            check_list = check_list[check_index]
+
+        return torch.tensor(value_ids), torch.tensor(pop_mask_ids)  # mcl: added
