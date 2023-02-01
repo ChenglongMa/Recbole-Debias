@@ -8,7 +8,7 @@ import torch
 import copy
 from collections import Counter
 
-from recbole.sampler.sampler import AbstractSampler
+from recbole.sampler.sampler import AbstractSampler, SeqSampler
 
 
 class DICESampler(AbstractSampler):
@@ -174,6 +174,7 @@ class DICESampler(AbstractSampler):
         Returns:
             sample_list (np.array): a list of samples and the len is [sample_num].
         """
+        assert sample_num == len(positive_item_ids), "The number of samples must be equal to the number of positive samples"
         if self.distribution == 'popularity':
             return self._pop_sampling(sample_num, positive_item_ids)
         else:
@@ -196,6 +197,88 @@ class DICESampler(AbstractSampler):
         pop_mask_list = np.array([self.prob[i] for i in positive_item_ids]) >= np.array([self.prob[i] for i in final_random_list])
 
         return final_random_list, pop_mask_list
+
+    def sample_neg_sequence(self, pos_sequence):
+        """
+        -------------------
+        Copy from class SeqSampler(AbstractSampler)
+        -------------------
+        For each moment, sampling one item from all the items except the one the user clicked on at that moment.
+
+        Args:
+            pos_sequence (torch.Tensor):  all users' item history sequence, with the shape of `(N, )`.
+
+        Returns:
+            torch.tensor : all users' negative item history sequence.
+
+        """
+        total_num = len(pos_sequence)
+        value_ids = np.zeros(total_num, dtype=np.int64)
+        pop_mask_ids = np.zeros(total_num, dtype=bool)  # mcl: added
+        check_list = np.arange(total_num)
+        while len(check_list) > 0:
+            value_ids[check_list], pop_mask_ids[check_list] = self.sampling(len(check_list), pos_sequence[check_list])  # mcl: added
+            check_index = np.where(value_ids[check_list] == pos_sequence[check_list])
+            check_list = check_list[check_index]
+
+        return torch.tensor(value_ids), torch.tensor(pop_mask_ids)  # mcl: added
+
+
+class MaskedSeqSampler(SeqSampler):
+
+    def __init__(self, dataset, distribution="uniform", alpha=1.0):
+        super().__init__(dataset, distribution, alpha)
+        if distribution == "uniform":
+            # NOTE: We build alias table regardless of the distribution.
+            # We set this `if` condition is because `AbstractSampler` has built alias table for `popularity` distribution
+            self._build_alias_table()
+
+    def _get_candidates_list(self):
+        """
+        Copy from class RepeatableSampler(AbstractSampler):
+        TODO: limit the count up to current timestamp
+        """
+        return self.dataset.inter_feat[self.iid_field].tolist()
+
+    def _uni_sampling(self, sample_num, positive_item_ids):
+        final_random_list = np.random.randint(1, self.item_num, sample_num)
+        pop_mask_list = np.array([self.prob[i] for i in positive_item_ids]) >= np.array([self.prob[i] for i in final_random_list])
+        return final_random_list, pop_mask_list
+
+    def _pop_sampling(self, sample_num, positive_item_ids):
+        """Sample [sample_num] items in the popularity-biased distribution.
+
+        Args:
+            sample_num (int): the number of samples.
+
+        Returns:
+            sample_list (np.array): a list of samples.
+        """
+
+        keys = np.array(list(self.prob.keys()))
+        random_index_list = np.random.randint(0, len(keys), sample_num)  # 随机产生total个item_id [1,2,3,4....]
+
+        final_random_list = keys[random_index_list]
+        pop_mask_list = np.array([self.prob[i] for i in positive_item_ids]) >= np.array([self.prob[i] for i in final_random_list])
+
+        return final_random_list, pop_mask_list
+
+    def sampling(self, sample_num, positive_item_ids):
+        """Sampling [sample_num] item_ids.
+
+        Args:
+            sample_num (int): the number of samples.
+
+        Returns:
+            sample_list (np.array): a list of samples and the len is [sample_num].
+        """
+        assert sample_num == len(positive_item_ids), "The number of samples must be equal to the number of positive samples"
+        if self.distribution == "uniform":
+            return self._uni_sampling(sample_num, positive_item_ids)
+        if self.distribution == 'popularity':
+            return self._pop_sampling(sample_num, positive_item_ids)
+        else:
+            raise NotImplementedError(f'The sampling distribution [{self.distribution}] is not implemented.')
 
     def sample_neg_sequence(self, pos_sequence):
         """

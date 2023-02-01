@@ -44,7 +44,7 @@ def run_recbole_debias(model=None, dataset=None, config_file_list=None, config_d
     # model loading and initialization
     init_seed(config['seed'], config['reproducibility'])
     model = get_model(config['model'])(config, train_data.dataset).to(config['device'])
-
+    logger.info(model)
     # transform = construct_transform(config)
     # flops = get_flops(model, dataset, config["device"], logger, transform)
     # logger.info(set_color("FLOPs", "blue") + f": {flops}")

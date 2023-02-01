@@ -127,7 +127,6 @@ def get_dataloader(config, phase):
     """
     register_table = {
         "DICE": _get_DICE_dataloader,
-        "H2NET": _get_DICE_dataloader,
     }
 
     if config['model'] in register_table:
@@ -189,7 +188,7 @@ def create_samplers(config, dataset, built_datasets):
     train_sampler, valid_sampler, test_sampler = None, None, None
 
     if train_neg_sample_args['distribution'] != 'none':
-        if config['model'] in ['DICE', 'H2NET']:
+        if config['model'] in ['DICE']:
             sampler = DICESampler(phases, built_datasets, train_neg_sample_args['distribution'], train_neg_sample_args["alpha"])
         elif not config['repeatable']:
             sampler = Sampler(phases, built_datasets, train_neg_sample_args['distribution'], train_neg_sample_args["alpha"])

@@ -10,6 +10,8 @@ from recbole.data.dataset import Dataset, SequentialDataset
 from recbole.sampler import SeqSampler
 from recbole.utils import FeatureType
 
+from recbole_debias.sampler import DICESampler, MaskedSeqSampler
+
 
 class DebiasDataset(Dataset):
     def __init__(self, config):
@@ -53,19 +55,19 @@ class DebiasDataset(Dataset):
         return pscore_cnt.to(self.device), column
 
 
-class H2NETDataset(SequentialDataset):
+class H2NETDataset2(SequentialDataset):
     def __init__(self, config):
         super().__init__(config)
 
 
-class DISDataset(SequentialDataset):
-    """:class:`DISDataset` is based on :class:`~recbole.data.dataset.sequential_dataset.SequentialDataset`.
+class H2NETDataset(SequentialDataset):
+    """:class:`H2NETDataset` is based on :class:`~recbole.data.dataset.sequential_dataset.SequentialDataset`.
     It is different from :class:`SequentialDataset` in `data_augmentation`.
     It adds users' negative item list to interaction.
 
     The original version of sampling negative item list is implemented by Zhichao Feng (fzcbupt@gmail.com) in 2021/2/25,
     and he updated the codes in 2021/3/19. In 2021/7/9, Yupeng refactored SequentialDataset & SequentialDataLoader,
-    then refactored DISDataset, either.
+    then refactored H2NETDataset, either.
 
     Attributes:
         augmentation (bool): Whether the interactions should be augmented in RecBole.
@@ -79,9 +81,16 @@ class DISDataset(SequentialDataset):
 
         list_suffix = config["LIST_SUFFIX"]
         neg_prefix = config["NEG_PREFIX"]
-        self.seq_sampler = SeqSampler(self)
-        self.neg_item_list_field = neg_prefix + self.iid_field + list_suffix
-        self.neg_item_list = self.seq_sampler.sample_neg_sequence(self.inter_feat[self.iid_field])
+        # self.seq_sampler = SeqSampler(self)
+        # mcl: added
+        train_neg_sample_args = config['train_neg_sample_args']  # TODO: train or evaluation?
+        # self.seq_sampler = MaskedSeqSampler(self, train_neg_sample_args['distribution'], train_neg_sample_args["alpha"])
+        self.seq_sampler = MaskedSeqSampler(self, distribution="uniform", alpha=1.0)
+        self.neg_item_list_field = neg_prefix + self.iid_field + list_suffix  # default: neg_item_list
+        self.mask_field = config['MASK_FIELD']
+        # end of [added]
+        # mcl: add neg_item_masks
+        self.neg_item_list, self.neg_item_masks = self.seq_sampler.sample_neg_sequence(self.inter_feat[self.iid_field])
 
     def data_augmentation(self):
         """Augmentation processing for sequential dataset.
@@ -147,14 +156,14 @@ class DISDataset(SequentialDataset):
                         and field in self.config["numerical_features"]
                 ):
                     shape += (2,)
-                # DIS
+                # H2NET
                 list_ftype = self.field2type[list_field]
                 dtype = (
                     torch.int64
                     if list_ftype in [FeatureType.TOKEN, FeatureType.TOKEN_SEQ]
                     else torch.float64
                 )
-                # End DIS
+                # End H2NET
                 new_dict[list_field] = torch.zeros(shape, dtype=dtype)
 
                 value = self.inter_feat[field]
@@ -163,14 +172,14 @@ class DISDataset(SequentialDataset):
                 ):
                     new_dict[list_field][i][:length] = value[index]
 
-                # DIS
+                # H2NET
                 if field == self.iid_field:
                     new_dict[self.neg_item_list_field] = torch.zeros(shape, dtype=dtype)
-                    for i, (index, length) in enumerate(
-                            zip(item_list_index, item_list_length)
-                    ):
+                    new_dict[self.mask_field] = torch.zeros(shape, dtype=torch.bool)
+                    for i, (index, length) in enumerate(zip(item_list_index, item_list_length)):
                         new_dict[self.neg_item_list_field][i][:length] = self.neg_item_list[index]
-                # End DIS
+                        new_dict[self.mask_field][i][:length] = self.neg_item_masks[index]
+                # End H2NET
 
         new_data.update(Interaction(new_dict))
         self.inter_feat = new_data

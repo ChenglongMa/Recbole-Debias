@@ -17,13 +17,13 @@ wandb_project: 'recbole_debias'        # (str) The project to conduct experiment
 shuffle: True                   # (bool) Whether or not to shuffle the training data before each epoch.
 
 # Training Settings
-epochs: 200                     # (int) The number of training epochs.
-train_batch_size: 6          # (int) The training batch size.
+epochs: 300                     # (int) The number of training epochs.
+train_batch_size: 2048          # (int) The training batch size.
 learner: adam                   # (str) The name of used optimizer.
 learning_rate: 0.001            # (float) Learning rate.
 train_neg_sample_args:          # (dict) Negative sampling configuration for model training.
-  distribution: popularity         # (str) The distribution of negative items.
-  sample_num: 2                 # (int) The sampled num of negative items.
+  distribution: uniform         # (str) The distribution of negative items.
+  sample_num: 1                 # (int) The sampled num of negative items.
   alpha: 1.0                    # (float) The power of sampling probability for popularity distribution.
   dynamic: False                # (bool) Whether to use dynamic negative sampling.
   candidate_num: 0              # (int) The number of candidate negative items when dynamic negative sampling.

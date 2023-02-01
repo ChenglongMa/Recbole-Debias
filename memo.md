@@ -4,7 +4,7 @@
 1. Added `decay` config
 
 [Dataset](./recbole_debias/data/dataset.py)
-1. `DIS`: new `data_augmentation` function;
+1. `H2NET`: new `data_augmentation` function;
 2. `H2NET`: no change;
 3. `DICE`: `DebiasDataset`, no change;
 
@@ -22,6 +22,6 @@ For the new model, we implement
 3. the default `Trainer`;
 4. the default `Dataloader`;
 
-[ ] To implement **masked negative sampling** in dataset and **sampler**;
+[x] To implement **masked negative sampling** in dataset and **sampler**;
 
 [ ] To implement the new model based on `DIEN`;
