@@ -17,5 +17,7 @@ repeatable: True
 
 load_col: # for ml-100k
   inter: [ 'user_id', 'item_id', 'rating', 'timestamp' ]
-  user: [ 'user_id', 'age', 'gender', 'occupation' ]
-  item: [ 'item_id', 'release_year' ]
+  user: [ 'user_id' ]
+#  user: [ 'user_id', 'age', 'gender', 'occupation' ]
+  item: [ 'item_id' ]
+#  item: [ 'item_id', 'release_year' ]

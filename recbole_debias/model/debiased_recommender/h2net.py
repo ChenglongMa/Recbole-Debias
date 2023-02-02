@@ -120,37 +120,10 @@ class H2NET(SequentialRecommender):
             if module.bias is not None:
                 constant_(module.bias, 0)
 
-    def forward(self, user, item_seq, neg_item_seq, item_seq_len, next_items):
+    def forward(self, user, item_seq, neg_item_seq, neg_item_mask_seq, item_seq_len, next_items):
 
-        max_length = item_seq.shape[1]
-        # concatenate the history item seq with the target item to get embedding together
-        item_seq_next_item = torch.cat(
-            (item_seq, neg_item_seq, next_items.unsqueeze(1)), dim=-1
-        )
-        sparse_embedding, dense_embedding = self.embedding_layer(
-            user, item_seq_next_item
-        )
-        # concat the sparse embedding and float embedding
-        feature_table = {}
-        for tp in self.types:
-            feature_table[tp] = []
-            if sparse_embedding[tp] is not None:
-                feature_table[tp].append(sparse_embedding[tp])
-            if dense_embedding[tp] is not None:
-                feature_table[tp].append(dense_embedding[tp])
-
-            feature_table[tp] = torch.cat(feature_table[tp], dim=-2)
-            table_shape = feature_table[tp].shape
-            feat_num, embedding_size = table_shape[-2], table_shape[-1]
-            feature_table[tp] = feature_table[tp].view(
-                table_shape[:-2] + (feat_num * embedding_size,)
-            )
-
-        user_feat_list = feature_table["user"]
-        item_feat_list, neg_item_feat_list, target_item_feat_emb = feature_table[
-            "item"
-        ].split([max_length, max_length, 1], dim=1)
-        target_item_feat_emb = target_item_feat_emb.squeeze(1)
+        user_feat_list, item_feat_list, neg_item_feat_list, target_item_feat_emb \
+            = self.get_embeddings(user, item_seq, neg_item_seq, next_items, self.embedding_layer)
 
         # interest
         interest, aux_loss = self.interest_extractor(
@@ -166,15 +139,42 @@ class H2NET(SequentialRecommender):
         preds = self.dnn_predict_layer(outputs)
         return preds.squeeze(1), aux_loss
 
+    def get_embeddings(self, user, item_seq, neg_item_seq, next_items, embedding_layer):
+        max_length = item_seq.shape[1]
+        # concatenate the history item seq with the target item to get embedding together
+        item_seq_next_item = torch.cat((item_seq, neg_item_seq, next_items.unsqueeze(1)), dim=-1)
+        sparse_embedding, dense_embedding = embedding_layer(user, item_seq_next_item)
+        # concat the sparse embedding and float embedding
+        feature_table = {}
+        for tp in self.types:
+            feature_table[tp] = []
+            if sparse_embedding[tp] is not None:
+                feature_table[tp].append(sparse_embedding[tp])
+            if dense_embedding[tp] is not None:
+                feature_table[tp].append(dense_embedding[tp])
+
+            feature_table[tp] = torch.cat(feature_table[tp], dim=-2)
+            feature_table[tp] = feature_table[tp].flatten(start_dim=-2)
+
+        # shape: [batch_size, emb_size_sum]
+        user_feat_list = feature_table["user"]
+        # shape of pos and neg feat_list: [batch_size, max_length, emb_size_sum]
+        item_feat_list, neg_item_feat_list, target_item_feat_emb = feature_table[
+            "item"
+        ].split([max_length, max_length, 1], dim=1)
+        target_item_feat_emb = target_item_feat_emb.squeeze(1)
+        return user_feat_list, item_feat_list, neg_item_feat_list, target_item_feat_emb
+
     def calculate_loss(self, interaction):
-        label = interaction[self.LABEL_FIELD]
+        user = interaction[self.USER_ID]
         item_seq = interaction[self.ITEM_SEQ]
         neg_item_seq = interaction[self.NEG_ITEM_SEQ]
-        user = interaction[self.USER_ID]
+        neg_item_mask_seq = interaction[self.NEG_ITEM_MASK_SEQ]
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         next_items = interaction[self.POS_ITEM_ID]
+        label = interaction[self.LABEL_FIELD]
         output, aux_loss = self.forward(
-            user, item_seq, neg_item_seq, item_seq_len, next_items
+            user, item_seq, neg_item_seq, neg_item_mask_seq, item_seq_len, next_items
         )
         loss = self.loss(output, label) + self.alpha * aux_loss
         return loss
