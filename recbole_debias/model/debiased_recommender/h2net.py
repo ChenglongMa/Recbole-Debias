@@ -51,6 +51,27 @@ class H2NET(SequentialRecommender):
         self.NEG_ITEM_SEQ = config["NEG_PREFIX"] + self.ITEM_SEQ
         self.NEG_ITEM_MASK_SEQ = config['MASK_FIELD']
 
+        # causal embedding
+        self.dis_loss = config['dis_loss']
+        self.dis_pen = config['dis_pen']
+        self.int_weight = config['int_weight']
+        self.soc_weight = config['soc_weight']
+        self.adaptive = config['adaptive']
+
+        prefix = 'train' if self.training else 'eval'
+        batch_size = config[f'{prefix}_batch_size']
+        neg_sample_num = config[f'{prefix}_neg_sample_args']['sample_num']
+        # See general_dataloader#_init_batch_size_and_step()#L50
+        self.n_pos_instance = max(batch_size // (1 + neg_sample_num), 1)
+
+        if self.dis_loss == 'L1':
+            self.criterion_discrepancy = nn.L1Loss()
+        elif self.dis_loss == 'L2':
+            self.criterion_discrepancy = nn.MSELoss()
+        elif self.dis_loss == 'dcor':
+            self.criterion_discrepancy = self.dcor
+        # end of causal embedding
+
         self.types = ["user", "item"]
         self.user_feat = dataset.get_user_feature()
         self.item_feat = dataset.get_item_feature()
@@ -92,9 +113,14 @@ class H2NET(SequentialRecommender):
         self.interest_evolution = InterestEvolvingLayer(
             mask_mat, item_feat_dim, item_feat_dim, self.att_list, gru=self.gru
         )
-        self.embedding_layer = ContextSeqEmbLayer(
+        self.interest_embedding_layer = ContextSeqEmbLayer(
             dataset, self.embedding_size, self.pooling_mode, self.device
         )
+
+        self.social_embedding_layer = ContextSeqEmbLayer(
+            dataset, self.embedding_size, self.pooling_mode, self.device
+        )
+
         self.dnn_mlp_layers = MLPLayers(
             self.dnn_mlp_list, activation="Dice", dropout=self.dropout_prob, bn=True
         )
@@ -103,7 +129,7 @@ class H2NET(SequentialRecommender):
         self.loss = nn.BCEWithLogitsLoss()
 
         self.apply(self._init_weights)
-        self.other_parameter_name = ["embedding_layer"]
+        self.other_parameter_name = ["interest_embedding_layer", "social_embedding_layer"]
 
     @staticmethod
     def _init_weights(module):
@@ -120,24 +146,50 @@ class H2NET(SequentialRecommender):
             if module.bias is not None:
                 constant_(module.bias, 0)
 
-    def forward(self, user, item_seq, neg_item_seq, neg_item_mask_seq, item_seq_len, next_items):
+    @staticmethod
+    def mask_bpr_loss(p_score, n_score, mask):
+        return -torch.mean(mask * torch.log(torch.sigmoid(p_score - n_score)))
 
-        user_feat_list, item_feat_list, neg_item_feat_list, target_item_feat_emb \
-            = self.get_embeddings(user, item_seq, neg_item_seq, next_items, self.embedding_layer)
+    @staticmethod
+    def dcor(x, y):
+        a = torch.norm(x[:, None] - x, p=2, dim=2)
+        b = torch.norm(y[:, None] - y, p=2, dim=2)
 
-        # interest
-        interest, aux_loss = self.interest_extractor(
-            item_feat_list, item_seq_len, neg_item_feat_list
-        )
-        evolution = self.interest_evolution(
-            target_item_feat_emb, interest, item_seq_len
-        )
+        A = a - a.mean(dim=0)[None, :] - a.mean(dim=1)[:, None] + a.mean()
+        B = b - b.mean(dim=0)[None, :] - b.mean(dim=1)[:, None] + b.mean()
 
-        inputs = torch.cat([evolution, target_item_feat_emb, user_feat_list], dim=-1)
-        # input the DNN to get the prediction score
-        outputs = self.dnn_mlp_layers(inputs)
-        preds = self.dnn_predict_layer(outputs)
-        return preds.squeeze(1), aux_loss
+        n = x.size(0)
+
+        dcov2_xy = (A * B).sum() / float(n * n)
+        dcov2_xx = (A * A).sum() / float(n * n)
+        dcov2_yy = (B * B).sum() / float(n * n)
+        dcor = -torch.sqrt(dcov2_xy) / torch.sqrt(torch.sqrt(dcov2_xx) * torch.sqrt(dcov2_yy))
+
+        return dcor
+
+    @staticmethod
+    def calc_embedding_score(user_emb, pos_item_seq_emb, neg_item_seq_emb, item_seq_len):
+        # Size: [batch_size, max_seq_len, emb_size] -> [batch_size, max_seq_len + 1, emb_size] -> [batch_size * (max_seq_len + 1), emb_size]
+        # pos_item_emb = torch.cat((pos_item_seq_emb, target_item_emb.unsqueeze(dim=1)), dim=1).flatten(end_dim=-2)
+        # neg_item_emb = torch.cat((neg_item_seq_emb, target_item_emb.unsqueeze(dim=1)), dim=1).flatten(end_dim=-2)
+        # TODO: change max_len to exact length of valid embedding, may not necessary
+        repeats = pos_item_seq_emb.size(1)
+        # repeats = item_seq_len
+        # a.repeat_interleave(torch.tensor([2, 3], device=a.device), dim=0)
+        # Repeat user embedding to be the same shape of item_seq_emb
+        user_emb = user_emb.repeat_interleave(repeats, dim=0)
+        # Size: [batch_size * max_len, embedding_size]
+        pos_item_emb = pos_item_seq_emb.flatten(end_dim=-2)
+        neg_item_emb = neg_item_seq_emb.flatten(end_dim=-2)
+
+        # Size: [batch_size * (max_seq_len + 1)]
+        # pos_score = torch.mul(user_emb.unsqueeze(dim=1).expand_as(pos_item_seq_emb), pos_item_seq_emb).sum(dim=-1)
+        # neg_score = torch.mul(user_emb.unsqueeze(dim=1).expand_as(neg_item_seq_emb), neg_item_seq_emb).sum(dim=-1)
+
+        # Size: [batch_size * max_len]
+        pos_score = torch.mul(user_emb, pos_item_emb).sum(dim=-1)
+        neg_score = torch.mul(user_emb, neg_item_emb).sum(dim=-1)
+        return pos_score, neg_score
 
     def get_embeddings(self, user, item_seq, neg_item_seq, next_items, embedding_layer):
         max_length = item_seq.shape[1]
@@ -165,6 +217,42 @@ class H2NET(SequentialRecommender):
         target_item_feat_emb = target_item_feat_emb.squeeze(1)
         return user_feat_list, item_feat_list, neg_item_feat_list, target_item_feat_emb
 
+    def forward(self, user, item_seq, neg_item_seq, neg_item_mask_seq, item_seq_len, next_items):
+        neg_item_mask = neg_item_mask_seq.flatten()
+
+        # Interest embedding
+        int_user_emb, pos_int_item_seq_emb, neg_int_item_seq_emb, target_int_item_emb \
+            = self.get_embeddings(user, item_seq, neg_item_seq, next_items, self.interest_embedding_layer)
+
+        pos_int_score, neg_int_score = self.calc_embedding_score(int_user_emb, pos_int_item_seq_emb, neg_int_item_seq_emb, item_seq_len)
+        int_loss = self.mask_bpr_loss(pos_int_score, neg_int_score, neg_item_mask)
+
+        # Social embedding
+        soc_user_emb, pos_soc_item_seq_emb, neg_soc_item_seq_emb, target_soc_item_emb \
+            = self.get_embeddings(user, item_seq, neg_item_seq, next_items, self.social_embedding_layer)
+
+        pos_soc_score, neg_soc_score = self.calc_embedding_score(soc_user_emb, pos_soc_item_seq_emb, neg_soc_item_seq_emb, item_seq_len)
+        soc_loss = self.mask_bpr_loss(neg_soc_score, pos_soc_score, neg_item_mask) + self.mask_bpr_loss(pos_soc_score, neg_soc_score, ~neg_item_mask)
+
+        # pos_score, neg_score = pos_int_score + pos_soc_score, neg_int_score + neg_soc_score
+        int_item_emb = torch.cat([pos_int_item_seq_emb, neg_int_item_seq_emb])
+        soc_item_emb = torch.cat([pos_soc_item_seq_emb, neg_soc_item_seq_emb])
+        dis_loss = self.criterion_discrepancy(int_user_emb, soc_user_emb) + self.criterion_discrepancy(int_item_emb,
+                                                                                                       soc_item_emb)
+        # interest
+        interest, aux_loss = self.interest_extractor(
+            pos_int_item_seq_emb, item_seq_len, neg_int_item_seq_emb
+        )
+        evolution = self.interest_evolution(
+            target_int_item_emb, interest, item_seq_len
+        )
+
+        inputs = torch.cat([evolution, target_int_item_emb, int_user_emb], dim=-1)
+        # input the DNN to get the prediction score
+        outputs = self.dnn_mlp_layers(inputs)
+        preds = self.dnn_predict_layer(outputs)
+        return preds.squeeze(1), aux_loss, int_loss, soc_loss, dis_loss
+
     def calculate_loss(self, interaction):
         user = interaction[self.USER_ID]
         item_seq = interaction[self.ITEM_SEQ]
@@ -173,19 +261,20 @@ class H2NET(SequentialRecommender):
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         next_items = interaction[self.POS_ITEM_ID]
         label = interaction[self.LABEL_FIELD]
-        output, aux_loss = self.forward(
+        output, aux_loss, int_loss, soc_loss, dis_loss = self.forward(
             user, item_seq, neg_item_seq, neg_item_mask_seq, item_seq_len, next_items
         )
-        loss = self.loss(output, label) + self.alpha * aux_loss
+        loss = self.loss(output, label) + self.alpha * aux_loss + self.int_weight * int_loss + self.soc_weight * soc_loss - self.dis_pen * dis_loss
         return loss
 
     def predict(self, interaction):
+        user = interaction[self.USER_ID]
         item_seq = interaction[self.ITEM_SEQ]
         neg_item_seq = interaction[self.NEG_ITEM_SEQ]
-        user = interaction[self.USER_ID]
+        neg_item_mask_seq = interaction[self.NEG_ITEM_MASK_SEQ]
         item_seq_len = interaction[self.ITEM_SEQ_LEN]
         next_items = interaction[self.POS_ITEM_ID]
-        scores, _ = self.forward(user, item_seq, neg_item_seq, item_seq_len, next_items)
+        scores, *_ = self.forward(user, item_seq, neg_item_seq, neg_item_mask_seq, item_seq_len, next_items)
         return self.sigmoid(scores)
 
 

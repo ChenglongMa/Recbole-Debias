@@ -55,11 +55,6 @@ class DebiasDataset(Dataset):
         return pscore_cnt.to(self.device), column
 
 
-class H2NETDataset2(SequentialDataset):
-    def __init__(self, config):
-        super().__init__(config)
-
-
 class H2NETDataset(SequentialDataset):
     """:class:`H2NETDataset` is based on :class:`~recbole.data.dataset.sequential_dataset.SequentialDataset`.
     It is different from :class:`SequentialDataset` in `data_augmentation`.

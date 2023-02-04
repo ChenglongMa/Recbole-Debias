@@ -4,6 +4,13 @@ dropout_prob: 0.0               # (float) The dropout rate.
 pooling_mode: 'mean'            # (str) Pooling mode of sequence data.
 gru_type: 'AUGRU'               # (str) GRU type of Interest Evolving Layer.
 alpha: 1.0                      # (float) Weight to balance the interest representation and CTR prediction.
+# causal embedding
+dis_loss: 'L1'
+dis_pen: 0.01
+int_weight: 0.1
+soc_weight: 0.1
+adaptive: False
+decay: 0.9
 
 MASK_FIELD: mask
 
@@ -11,8 +18,9 @@ eval_args:
   split: { 'LS': 'valid_and_test' }
   order: TO
   mode: uni100
-metrics: [ 'AUC', 'LogLoss' ]
-valid_metric: AUC
+#metrics: [ 'NDCG' ]
+#metrics: [ 'AUC', 'LogLoss' ]
+#valid_metric: AUC
 repeatable: True
 
 load_col: # for ml-100k
