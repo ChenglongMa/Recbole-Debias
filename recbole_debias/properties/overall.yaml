@@ -18,7 +18,7 @@ shuffle: True                   # (bool) Whether or not to shuffle the training 
 
 # Training Settings
 epochs: 300                     # (int) The number of training epochs.
-train_batch_size: 4          # (int) The training batch size.
+train_batch_size: 2048          # (int) The training batch size.
 learner: adam                   # (str) The name of used optimizer.
 learning_rate: 0.001            # (float) Learning rate.
 train_neg_sample_args:          # (dict) Negative sampling configuration for model training.

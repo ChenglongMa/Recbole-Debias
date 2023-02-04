@@ -84,15 +84,16 @@ class H2NET(SequentialRecommender):
             1 if dataset.field2type[field] not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT] or field in config["numerical_features"] else 0
             for field in self.user_feat.interaction.keys()
         )
-        item_feat_dim = num_item_feature * self.embedding_size
+        user_feat_dim = 2 * num_user_feature * self.embedding_size  # mcl: concat interest embedding and social embedding, thus add `2 * `
+        item_feat_dim = 2 * num_item_feature * self.embedding_size  # mcl: concat interest embedding and social embedding, thus add `2 * `
         mask_mat = (
             torch.arange(self.max_seq_length).to(self.device).view(1, -1)
         )  # init mask
 
         # init sizes of used layers
-        self.att_list = [4 * num_item_feature * self.embedding_size] + self.mlp_hidden_size
+        self.att_list = [4 * item_feat_dim] + self.mlp_hidden_size
         self.interest_mlp_list = [2 * item_feat_dim] + self.mlp_hidden_size + [1]
-        self.dnn_mlp_list = [2 * item_feat_dim + num_user_feature * self.embedding_size] + self.mlp_hidden_size
+        self.dnn_mlp_list = [2 * item_feat_dim + user_feat_dim] + self.mlp_hidden_size
 
         # init interest extractor layer, interest evolving layer embedding layer, MLP layer and linear layer
         self.interest_extractor = InterestExtractorNetwork(
@@ -223,19 +224,24 @@ class H2NET(SequentialRecommender):
         soc_loss = self.mask_bpr_loss(neg_soc_score, pos_soc_score, neg_item_mask) + self.mask_bpr_loss(pos_soc_score, neg_soc_score, ~neg_item_mask)
 
         # pos_score, neg_score = pos_int_score + pos_soc_score, neg_int_score + neg_soc_score
-        int_item_emb = torch.cat([pos_int_item_seq_emb, neg_int_item_seq_emb])
-        soc_item_emb = torch.cat([pos_soc_item_seq_emb, neg_soc_item_seq_emb])
+        int_item_emb = torch.cat([pos_int_item_seq_emb, neg_int_item_seq_emb], dim=0)
+        soc_item_emb = torch.cat([pos_soc_item_seq_emb, neg_soc_item_seq_emb], dim=0)
         dis_loss = self.criterion_discrepancy(int_user_emb, soc_user_emb) + self.criterion_discrepancy(int_item_emb, soc_item_emb)
 
         # interest
+        pos_item_seq_emb = torch.cat([pos_int_item_seq_emb, pos_soc_item_seq_emb], dim=-1)
+        neg_item_seq_emb = torch.cat([neg_int_item_seq_emb, neg_soc_item_seq_emb], dim=-1)
         interest, aux_loss = self.interest_extractor(
-            pos_int_item_seq_emb, item_seq_len, neg_int_item_seq_emb
+            pos_item_seq_emb, item_seq_len, neg_item_seq_emb
         )
+        target_item_emb = torch.cat([target_int_item_emb, target_soc_item_emb], dim=-1)
         evolution = self.interest_evolution(
-            target_int_item_emb, interest, item_seq_len
+            target_item_emb, interest, item_seq_len
         )
 
-        inputs = torch.cat([evolution, target_int_item_emb, int_user_emb], dim=-1)
+        user_emb = torch.cat([int_user_emb, soc_user_emb], dim=-1)
+        # inputs = torch.cat([evolution, target_int_item_emb, int_user_emb], dim=-1)
+        inputs = torch.cat([evolution, target_item_emb, user_emb], dim=-1)
         # input the DNN to get the prediction score
         outputs = self.dnn_mlp_layers(inputs)
         preds = self.dnn_predict_layer(outputs)
@@ -361,7 +367,7 @@ class InterestEvolvingLayer(nn.Module):
             softmax_stag=True,
             gru="GRU",
     ):
-        super(InterestEvolvingLayer, self).__init__()
+        super().__init__()
 
         self.mask_mat = mask_mat
         self.gru = gru

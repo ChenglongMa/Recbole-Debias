@@ -60,7 +60,6 @@ def run_recbole_debias(model=None, dataset=None, config_file_list=None, config_d
     # model evaluation
     test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config['show_progress'])
 
-    logger.info(model)
     logger.info(set_color('best valid ', 'yellow') + f': {best_valid_result}')
     logger.info(set_color('test result', 'yellow') + f': {test_result}')
 
