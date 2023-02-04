@@ -77,19 +77,11 @@ class H2NET(SequentialRecommender):
         self.item_feat = dataset.get_item_feature()
 
         num_item_feature = sum(
-            1
-            if dataset.field2type[field]
-               not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT]
-               or field in config["numerical_features"]
-            else 0
+            1 if dataset.field2type[field] not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT] or field in config["numerical_features"] else 0
             for field in self.item_feat.interaction.keys()
         )
         num_user_feature = sum(
-            1
-            if dataset.field2type[field]
-               not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT]
-               or field in config["numerical_features"]
-            else 0
+            1 if dataset.field2type[field] not in [FeatureType.FLOAT_SEQ, FeatureType.FLOAT] or field in config["numerical_features"] else 0
             for field in self.user_feat.interaction.keys()
         )
         item_feat_dim = num_item_feature * self.embedding_size
@@ -98,13 +90,9 @@ class H2NET(SequentialRecommender):
         )  # init mask
 
         # init sizes of used layers
-        self.att_list = [
-                            4 * num_item_feature * self.embedding_size
-                        ] + self.mlp_hidden_size
+        self.att_list = [4 * num_item_feature * self.embedding_size] + self.mlp_hidden_size
         self.interest_mlp_list = [2 * item_feat_dim] + self.mlp_hidden_size + [1]
-        self.dnn_mlp_list = [
-                                2 * item_feat_dim + num_user_feature * self.embedding_size
-                            ] + self.mlp_hidden_size
+        self.dnn_mlp_list = [2 * item_feat_dim + num_user_feature * self.embedding_size] + self.mlp_hidden_size
 
         # init interest extractor layer, interest evolving layer embedding layer, MLP layer and linear layer
         self.interest_extractor = InterestExtractorNetwork(
@@ -237,8 +225,8 @@ class H2NET(SequentialRecommender):
         # pos_score, neg_score = pos_int_score + pos_soc_score, neg_int_score + neg_soc_score
         int_item_emb = torch.cat([pos_int_item_seq_emb, neg_int_item_seq_emb])
         soc_item_emb = torch.cat([pos_soc_item_seq_emb, neg_soc_item_seq_emb])
-        dis_loss = self.criterion_discrepancy(int_user_emb, soc_user_emb) + self.criterion_discrepancy(int_item_emb,
-                                                                                                       soc_item_emb)
+        dis_loss = self.criterion_discrepancy(int_user_emb, soc_user_emb) + self.criterion_discrepancy(int_item_emb, soc_item_emb)
+
         # interest
         interest, aux_loss = self.interest_extractor(
             pos_int_item_seq_emb, item_seq_len, neg_int_item_seq_emb
@@ -285,7 +273,7 @@ class InterestExtractorNetwork(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, mlp_size):
-        super(InterestExtractorNetwork, self).__init__()
+        super().__init__()
         self.gru = nn.GRU(
             input_size=input_size, hidden_size=hidden_size, batch_first=True
         )
