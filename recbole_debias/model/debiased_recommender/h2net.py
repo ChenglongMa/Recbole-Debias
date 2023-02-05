@@ -11,6 +11,7 @@ from torch.nn.init import xavier_normal_, xavier_uniform_, constant_
 from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_sequence
 
 from recbole_debias.model.abstract_recommender import DebiasedRecommender
+from recbole_debias.model.layers import AUGRUCell, DebiasedRNN
 
 
 class H2NET(SequentialRecommender):
@@ -280,9 +281,8 @@ class InterestExtractorNetwork(nn.Module):
 
     def __init__(self, input_size, hidden_size, mlp_size):
         super().__init__()
-        self.gru = nn.GRU(
-            input_size=input_size, hidden_size=hidden_size, batch_first=True
-        )
+        # self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, batch_first=True)
+        self.gru = DebiasedRNN(input_size=input_size, hidden_size=hidden_size, bias=True, gru='DeGRU')
         self.auxiliary_net = MLPLayers(layers=mlp_size, activation="none")
 
     def forward(self, keys, keys_length, neg_keys=None):
@@ -448,22 +448,11 @@ class InterestEvolvingLayer(nn.Module):
             outputs = outputs.squeeze(0)
 
         elif self.gru == "AGRU" or self.gru == "AUGRU":
-            att_outputs = self.attention_layer(queries, keys, keys_length).squeeze(
-                1
-            )  # [B, T]
-            packed_rnn_outputs = pack_padded_sequence(
-                keys, lengths=keys_length_cpu, batch_first=True, enforce_sorted=False
-            )
-            packed_att_outputs = pack_padded_sequence(
-                att_outputs,
-                lengths=keys_length_cpu,
-                batch_first=True,
-                enforce_sorted=False,
-            )
+            att_outputs = self.attention_layer(queries, keys, keys_length).squeeze(1)  # [B, T]
+            packed_rnn_outputs = pack_padded_sequence(keys, lengths=keys_length_cpu, batch_first=True, enforce_sorted=False)
+            packed_att_outputs = pack_padded_sequence(att_outputs, lengths=keys_length_cpu, batch_first=True, enforce_sorted=False, )
             outputs = self.dynamic_rnn(packed_rnn_outputs, packed_att_outputs)
-            outputs, _ = pad_packed_sequence(
-                outputs, batch_first=True, padding_value=0.0, total_length=hist_len
-            )
+            outputs, _ = pad_packed_sequence(outputs, batch_first=True, padding_value=0.0, total_length=hist_len)
             outputs = self.final_output(outputs, keys_length)  # [B, H]
 
         return outputs
@@ -482,7 +471,7 @@ class AGRUCell(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, bias=True):
-        super(AGRUCell, self).__init__()
+        super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
@@ -499,8 +488,8 @@ class AGRUCell(nn.Module):
             self.register_parameter("bias_ih", None)
             self.register_parameter("bias_hh", None)
 
-    def forward(self, input, hidden_output, att_score):
-        gi = F.linear(input, self.weight_ih, self.bias_ih)
+    def forward(self, inputs, hidden_output, att_score):
+        gi = F.linear(inputs, self.weight_ih, self.bias_ih)
         gh = F.linear(hidden_output, self.weight_hh, self.bias_hh)
         i_r, i_u, i_h = gi.chunk(3, 1)
         h_r, h_u, h_h = gh.chunk(3, 1)
@@ -514,7 +503,46 @@ class AGRUCell(nn.Module):
         return hy
 
 
-class AUGRUCell(nn.Module):
+class DynamicRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, bias=True, gru="AGRU"):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+
+        if gru == "AGRU":
+            self.rnn = AGRUCell(input_size, hidden_size, bias)
+        elif gru == "AUGRU":
+            self.rnn = AUGRUCell(input_size, hidden_size, bias)
+
+    def forward(self, inputs: PackedSequence, att_scores: PackedSequence = None, hidden_output=None):
+        if not isinstance(inputs, PackedSequence) or not isinstance(att_scores, PackedSequence):
+            raise NotImplementedError("DynamicRNN only supports packed input and att_scores")
+
+        inputs, batch_sizes, sorted_indices, unsorted_indices = inputs
+        att_scores = att_scores.data
+
+        max_batch_size = int(batch_sizes[0])
+        if hidden_output is None:
+            hidden_output = torch.zeros(max_batch_size, self.hidden_size, dtype=inputs.dtype, device=inputs.device)
+
+        outputs = torch.zeros(inputs.size(0), self.hidden_size, dtype=inputs.dtype, device=inputs.device)
+
+        begin = 0
+        for batch in batch_sizes:
+            new_hx = self.rnn(
+                inputs[begin: begin + batch],
+                hidden_output[0:batch],
+                att_scores[begin: begin + batch],
+            )
+            outputs[begin: begin + batch] = new_hx
+            hidden_output = new_hx
+            begin += batch
+
+        return PackedSequence(outputs, batch_sizes, sorted_indices, unsorted_indices)
+
+
+# Deprecated
+class AUGRUCell2(nn.Module):
     """ Effect of GRU with attentional update gate (AUGRU). AUGRU combines attention mechanism and GRU seamlessly.
 
     Formally:
@@ -524,7 +552,7 @@ class AUGRUCell(nn.Module):
     """
 
     def __init__(self, input_size, hidden_size, bias=True):
-        super(AUGRUCell, self).__init__()
+        super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
@@ -541,8 +569,8 @@ class AUGRUCell(nn.Module):
             self.register_parameter("bias_ih", None)
             self.register_parameter("bias_hh", None)
 
-    def forward(self, input, hidden_output, att_score):
-        gi = F.linear(input, self.weight_ih, self.bias_ih)
+    def forward(self, inputs, hidden_output, att_score):
+        gi = F.linear(inputs, self.weight_ih, self.bias_ih)
         gh = F.linear(hidden_output, self.weight_hh, self.bias_hh)
         i_r, i_u, i_h = gi.chunk(3, 1)
         h_r, h_u, h_h = gh.chunk(3, 1)
@@ -556,49 +584,3 @@ class AUGRUCell(nn.Module):
         hy = (1 - update_gate) * hidden_output + update_gate * new_state
 
         return hy
-
-
-class DynamicRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, bias=True, gru="AGRU"):
-        super(DynamicRNN, self).__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-
-        if gru == "AGRU":
-            self.rnn = AGRUCell(input_size, hidden_size, bias)
-        elif gru == "AUGRU":
-            self.rnn = AUGRUCell(input_size, hidden_size, bias)
-
-    def forward(self, input, att_scores=None, hidden_output=None):
-        if not isinstance(input, PackedSequence) or not isinstance(
-                att_scores, PackedSequence
-        ):
-            raise NotImplementedError(
-                "DynamicRNN only supports packed input and att_scores"
-            )
-
-        input, batch_sizes, sorted_indices, unsorted_indices = input
-        att_scores = att_scores.data
-
-        max_batch_size = int(batch_sizes[0])
-        if hidden_output is None:
-            hidden_output = torch.zeros(
-                max_batch_size, self.hidden_size, dtype=input.dtype, device=input.device
-            )
-
-        outputs = torch.zeros(
-            input.size(0), self.hidden_size, dtype=input.dtype, device=input.device
-        )
-
-        begin = 0
-        for batch in batch_sizes:
-            new_hx = self.rnn(
-                input[begin: begin + batch],
-                hidden_output[0:batch],
-                att_scores[begin: begin + batch],
-            )
-            outputs[begin: begin + batch] = new_hx
-            hidden_output = new_hx
-            begin += batch
-
-        return PackedSequence(outputs, batch_sizes, sorted_indices, unsorted_indices)

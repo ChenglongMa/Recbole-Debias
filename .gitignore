@@ -133,6 +133,7 @@ log_tensorboard/
 log/
 saved/
 dataset/
+result/
 run_hyperParams.py
 neumf.py
 NeuMF.yaml
