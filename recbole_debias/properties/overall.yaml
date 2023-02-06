@@ -8,9 +8,9 @@ reproducibility: True           # (bool) Whether or not to make results reproduc
 data_path: 'dataset/'           # (str) The path of input dataset.
 checkpoint_dir: 'saved'         # (str) The path to save checkpoint file.
 show_progress: True             # (bool) Whether or not to show the progress bar of every epoch.
-save_dataset: False             # (bool) Whether or not to save filtered dataset.
+save_dataset: True             # (bool) Whether or not to save filtered dataset.
 dataset_save_path: ~            # (str) The path of saved dataset.
-save_dataloaders: False         # (bool) Whether or not save split dataloaders.
+save_dataloaders: True         # (bool) Whether or not save split dataloaders.
 dataloaders_save_path: ~        # (str) The path of saved dataloaders.
 log_wandb: False                # (bool) Whether or not to use Weights & Biases(W&B).
 wandb_project: 'recbole_debias'        # (str) The project to conduct experiments in W&B.
@@ -44,7 +44,7 @@ eval_args:                      # (dict) 4 keys: group_by, order, split, and mod
   order: TO                     # (str) The ordering strategy ranging in ['RO', 'TO'].
   mode: full                    # (str) The evaluation mode ranging in ['full','unixxx','popxxx','labeled'].
 repeatable: True               # (bool) Whether to evaluate results with a repeatable recommendation scene.
-metrics: ["Recall","MRR","NDCG","Hit","Precision"]  # (list or str) Evaluation metrics.
+metrics: ["Recall","NDCG","Precision","AveragePopularity", "GiniIndex", "ShannonEntropy", "TailPercentage", "MRR", "Hit", "ItemCoverage"]  # (list or str) Evaluation metrics.
 topk: [10]                      # (list or int or None) The value of k for topk evaluation metrics.
 valid_metric: NDCG@10            # (str) The evaluation metric for early stopping. 
 valid_metric_bigger: True       # (bool) Whether to take a bigger valid metric value as a better result.

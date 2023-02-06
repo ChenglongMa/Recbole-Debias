@@ -14,7 +14,7 @@ from recbole_debias.data import create_dataset, data_preparation
 from recbole_debias.utils import get_model, get_trainer
 
 
-def run_recbole_debias(model=None, dataset=None, config_file_list=None, config_dict=None, saved=True):
+def run_recbole_debias(model=None, dataset=None, config_file_list=None, config_dict=None, saved=True, model_file=None):
     r""" A fast running api, which includes the complete process of
     training and testing a model on a specified dataset
 
@@ -53,12 +53,15 @@ def run_recbole_debias(model=None, dataset=None, config_file_list=None, config_d
     trainer = get_trainer(config['MODEL_TYPE'], config['model'])(config, model)
 
     # model training
-    best_valid_score, best_valid_result = trainer.fit(
-        train_data, valid_data, saved=saved, show_progress=config['show_progress']
-    )
+    best_valid_score, best_valid_result = "N/A", "N/A"
+    if model_file is None:
+        best_valid_score, best_valid_result = trainer.fit(train_data, valid_data, saved=saved, show_progress=config['show_progress'])
+    else:
+        # When calculate ItemCoverage metrics, we need to run this code for set item_nums in eval_collector.
+        trainer.eval_collector.data_collect(train_data)
 
     # model evaluation
-    test_result = trainer.evaluate(test_data, load_best_model=saved, show_progress=config['show_progress'])
+    test_result = trainer.evaluate(test_data, load_best_model=saved, model_file=model_file, show_progress=config['show_progress'])
 
     logger.info(set_color('best valid ', 'yellow') + f': {best_valid_result}')
     logger.info(set_color('test result', 'yellow') + f': {test_result}')
@@ -97,3 +100,39 @@ def objective_function(config_dict=None, config_file_list=None, saved=True):
         'best_valid_result': best_valid_result,
         'test_result': test_result
     }
+
+
+def load_data_and_model(model_file):
+    r"""Load filtered dataset, split dataloaders and saved model.
+
+    Args:
+        model_file (str): The path of saved model file.
+
+    Returns:
+        tuple:
+            - config (Config): An instance object of Config, which record parameter information in :attr:`model_file`.
+            - model (AbstractRecommender): The model load from :attr:`model_file`.
+            - dataset (Dataset): The filtered dataset.
+            - train_data (AbstractDataLoader): The dataloader for training.
+            - valid_data (AbstractDataLoader): The dataloader for validation.
+            - test_data (AbstractDataLoader): The dataloader for testing.
+    """
+    import torch
+
+    checkpoint = torch.load(model_file)
+    config = checkpoint["config"]
+    init_seed(config["seed"], config["reproducibility"])
+    init_logger(config)
+    logger = getLogger()
+    logger.info(config)
+
+    dataset = create_dataset(config)
+    logger.info(dataset)
+    train_data, valid_data, test_data = data_preparation(config, dataset)
+
+    init_seed(config["seed"], config["reproducibility"])
+    model = get_model(config["model"])(config, train_data._dataset).to(config["device"])
+    model.load_state_dict(checkpoint["state_dict"])
+    model.load_other_parameter(checkpoint.get("other_parameter"))
+
+    return config, model, dataset, train_data, valid_data, test_data
