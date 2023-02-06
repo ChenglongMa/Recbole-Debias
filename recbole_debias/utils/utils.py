@@ -19,7 +19,8 @@ def get_model(model_name):
         Recommender: model class
     """
     model_submodule = [
-        'debiased_recommender'
+        'debiased_recommender',
+        'sequential_recommender'
     ]
 
     model_file_name = model_name.lower()

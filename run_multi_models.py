@@ -1,4 +1,6 @@
 import argparse
+import os
+import time
 
 import pandas as pd
 
@@ -16,10 +18,15 @@ if __name__ == '__main__':
     res = []
 
     for model in args.models:
+        start = time.time()
         result = run_recbole_debias(model=model, dataset=args.dataset, config_file_list=config_file_list)
-        for k, v in result['test_result'].items():
-            res.append([model, k, v])
-    res = pd.DataFrame(res, columns=['model', 'metric', 'value'])
-    res.to_csv('./result.csv', index=False)
+        elapse = (time.time() - start) / 60  # unit: s
+        for metric, value in result['test_result'].items():
+            res.append([model, metric, value, elapse])
+
+    res = pd.DataFrame(res, columns=['model', 'metric', 'value', 'elapse(mins)'])
+    os.makedirs('./result/', exist_ok=True)
+    now = time.strftime("%y%m%d%H%M%S")
+    res.to_csv(f'./result/result_{now}.csv', index=False)
     print(res.head())
 

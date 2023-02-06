@@ -24,4 +24,10 @@ For the new model, we implement
 
 [x] To implement **masked negative sampling** in dataset and **sampler**;
 
-[ ] To implement the new model based on `DIEN`;
+[x] To implement the new model based on `DIEN`;
+
+[ ] Save seq benchmark datasets;
+
+[ ] Implement intervention dataset generation method;
+
+[ ] Implement diversity evaluation metrics;

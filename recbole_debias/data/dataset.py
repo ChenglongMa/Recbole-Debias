@@ -3,12 +3,13 @@
 # @Author : Jingsen Zhang
 # @Email  : zhangjingsen@ruc.edu.cn
 import numpy as np
+import pandas as pd
 import torch
 from recbole.data.interaction import Interaction
 
 from recbole.data.dataset import Dataset, SequentialDataset
 from recbole.sampler import SeqSampler
-from recbole.utils import FeatureType
+from recbole.utils import FeatureType, FeatureSource
 
 from recbole_debias.sampler import DICESampler, MaskedSeqSampler
 
@@ -71,21 +72,28 @@ class H2NETDataset(SequentialDataset):
         neg_item_list (torch.tensor): all users' negative item history sequence.
     """
 
-    def __init__(self, config):
-        super().__init__(config)
-
-        list_suffix = config["LIST_SUFFIX"]
-        neg_prefix = config["NEG_PREFIX"]
-        # self.seq_sampler = SeqSampler(self)
-        # mcl: added
-        train_neg_sample_args = config['train_neg_sample_args']  # TODO: train or evaluation?
-        # self.seq_sampler = MaskedSeqSampler(self, train_neg_sample_args['distribution'], train_neg_sample_args["alpha"])
-        self.seq_sampler = MaskedSeqSampler(self, distribution="uniform", alpha=1.0)
+    def _get_field_from_config(self):
+        super()._get_field_from_config()
+        list_suffix = self.config["LIST_SUFFIX"]
+        neg_prefix = self.config["NEG_PREFIX"]
         self.neg_item_list_field = neg_prefix + self.iid_field + list_suffix  # default: neg_item_list
-        self.mask_field = config['MASK_FIELD']
-        # end of [added]
-        # mcl: add neg_item_masks
-        self.neg_item_list, self.neg_item_masks = self.seq_sampler.sample_neg_sequence(self.inter_feat[self.iid_field])
+        self.mask_field = self.config['MASK_FIELD']
+
+    def _benchmark_presets(self):
+        list_suffix = self.config["LIST_SUFFIX"]
+        for field in self.inter_feat:
+            if field + list_suffix in self.inter_feat:
+                list_field = field + list_suffix
+                setattr(self, f"{field}_list_field", list_field)
+        self.set_field_property(self.item_list_length_field, FeatureType.TOKEN, FeatureSource.INTERACTION, 1)
+
+        if hasattr(self, 'item_id_list_field'):
+            self.inter_feat[self.item_list_length_field] = self.inter_feat[self.item_id_list_field].agg(len)
+        else:
+            for feat_name in self.feat_name_list:
+                feat = getattr(self, feat_name)
+                setattr(self, feat_name, self._dataframe_to_interaction(feat))
+            self.data_augmentation()
 
     def data_augmentation(self):
         """Augmentation processing for sequential dataset.
@@ -105,6 +113,11 @@ class H2NETDataset(SequentialDataset):
         ``u1, <i1, i2, i3> | i4``
         """
         self.logger.debug("data_augmentation")
+
+        # mcl: added
+        # self.seq_sampler = SeqSampler(self)
+        seq_sampler = MaskedSeqSampler(self, distribution="uniform", alpha=1.0)
+        neg_item_list, neg_item_masks = seq_sampler.sample_neg_sequence(self.inter_feat[self.iid_field].numpy())
 
         self._aug_presets()
 
@@ -126,7 +139,7 @@ class H2NETDataset(SequentialDataset):
                 target_index.append(i)
                 item_list_length.append(i - seq_start)
 
-        uid_list = np.array(uid_list)
+        # uid_list = np.array(uid_list)
         item_list_index = np.array(item_list_index)
         target_index = np.array(target_index)
         item_list_length = np.array(item_list_length, dtype=np.int64)
@@ -172,9 +185,45 @@ class H2NETDataset(SequentialDataset):
                     new_dict[self.neg_item_list_field] = torch.zeros(shape, dtype=dtype)
                     new_dict[self.mask_field] = torch.zeros(shape, dtype=torch.bool)
                     for i, (index, length) in enumerate(zip(item_list_index, item_list_length)):
-                        new_dict[self.neg_item_list_field][i][:length] = self.neg_item_list[index]
-                        new_dict[self.mask_field][i][:length] = self.neg_item_masks[index]
+                        new_dict[self.neg_item_list_field][i][:length] = neg_item_list[index]
+                        new_dict[self.mask_field][i][:length] = neg_item_masks[index]
                 # End H2NET
 
         new_data.update(Interaction(new_dict))
         self.inter_feat = new_data
+
+    def build(self):
+        """Processing dataset according to evaluation setting, including Group, Order and Split.
+                See :class:`~recbole.config.eval_setting.EvalSetting` for details.
+
+                Args:
+                    eval_setting (:class:`~recbole.config.eval_setting.EvalSetting`):
+                        Object contains evaluation settings, which guide the data processing procedure.
+
+                Returns:
+                    list: List of built :class:`Dataset`.
+        """
+        if self.benchmark_filename_list is not None:
+            self._drop_unused_col()
+            cumsum = list(np.cumsum(self.file_size_list))
+            datasets = [
+                self.copy(self.inter_feat[start:end])
+                for start, end in zip([0] + cumsum[:-1], cumsum)
+            ]
+
+            # mcl: save
+            for dataset in datasets:
+                df = pd.DataFrame(dataset.inter_feat)
+            # end save
+            return datasets
+
+        ordering_args = self.config["eval_args"]["order"]
+        if ordering_args != "TO":
+            raise ValueError(
+                f"The ordering args for sequential recommendation has to be 'TO'"
+            )
+
+        return super().build()
+
+
+DIENDataset = H2NETDataset
