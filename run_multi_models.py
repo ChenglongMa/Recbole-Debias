@@ -17,8 +17,8 @@ if __name__ == '__main__':
     models = args.models
     mfs = args.model_files
     model_and_files = []
-    for i in range(len(mfs)):
-        mf = mfs[i]
+    for i in range(len(models)):
+        mf = mfs[i] if i < len(mfs) else None
         model = models[i]
         if mf.split('-')[0].lower() != model.lower():
             raise TypeError("Checkpoint file does not match model name")
