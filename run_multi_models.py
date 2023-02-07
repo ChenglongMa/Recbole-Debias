@@ -20,7 +20,7 @@ if __name__ == '__main__':
     for i in range(len(models)):
         mf = mfs[i] if i < len(mfs) else None
         model = models[i]
-        if mf.split('-')[0].lower() != model.lower():
+        if mf is not None and mf.split('-')[0].lower() != model.lower():
             raise TypeError("Checkpoint file does not match model name")
         model_and_files.append((model, f"saved/{mf}.pth" if mf is not None else None))
 
