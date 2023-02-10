@@ -14,7 +14,7 @@ from recbole.sampler import Sampler, RepeatableSampler
 from recbole.utils import set_color
 from recbole.utils.argument_list import dataset_arguments
 
-from recbole_debias.data.dataloader import NegSampleEvalDataLoader2, DebiasDataloader, DICEDataloader
+from recbole_debias.data.dataloader import NegSampleEvalDataLoader, DebiasDataloader, DICEDataloader
 from recbole_debias.sampler import DICESampler
 from recbole_debias.utils import ModelType
 
@@ -144,7 +144,7 @@ def get_dataloader(config, phase):
         if eval_mode == "full":
             return FullSortEvalDataLoader
         else:
-            return NegSampleEvalDataLoader2
+            return NegSampleEvalDataLoader
 
 
 def _get_DICE_dataloader(config, phase):
@@ -164,7 +164,7 @@ def _get_DICE_dataloader(config, phase):
         if eval_mode == "full":
             return FullSortEvalDataLoader
         else:
-            return NegSampleEvalDataLoader2
+            return NegSampleEvalDataLoader
 
 
 def create_samplers(config, dataset, built_datasets):

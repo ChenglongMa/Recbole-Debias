@@ -14,7 +14,6 @@ recbole.utils.case_study
 
 import numpy as np
 import torch
-from recbole.data import AbstractDataLoader
 from recbole.data.dataset import Dataset
 
 from recbole.data.interaction import Interaction
@@ -24,7 +23,7 @@ from recbole_debias.data import split_interaction
 
 
 @torch.no_grad()
-def full_sort_scores(model, test_data: AbstractDataLoader, uid_series=None, device=None, batch_size=None):
+def full_sort_scores(model, test_data, uid_series=None, device=None, batch_size=None):
     """Calculate the scores of all items for each user in uid_series.
 
     Note:

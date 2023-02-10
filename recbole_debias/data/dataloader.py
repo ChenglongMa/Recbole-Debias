@@ -143,7 +143,7 @@ class DICEDataloader(TrainDataLoader):
         self.model = model
 
 
-class NegSampleEvalDataLoader2(recbole.data.NegSampleEvalDataLoader):
+class NegSampleEvalDataLoader(recbole.data.NegSampleEvalDataLoader):
     def __init__(self, config, dataset, sampler, shuffle=False):
         self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
         super().__init__(config, dataset, sampler, shuffle)
