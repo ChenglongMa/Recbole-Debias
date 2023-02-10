@@ -14,7 +14,7 @@ eval_args:
 #metrics: [ 'NDCG' ]
 #metrics: [ 'AUC', 'LogLoss' ]
 #valid_metric: AUC
-repeatable: True
+#repeatable: True
 
 load_col: # for ml-100k
   inter: [ 'user_id', 'item_id', 'rating', 'timestamp' ]

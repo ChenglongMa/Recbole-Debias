@@ -6,15 +6,20 @@
 import logging
 from logging import getLogger
 
+import pandas as pd
 import torch
-from recbole.data import construct_transform
-from recbole.utils import init_logger, init_seed, set_color, get_flops
+from recbole.trainer import Trainer
+from recbole.utils import init_logger, init_seed, set_color
+
 from recbole_debias.config import Config
 from recbole_debias.data import create_dataset, data_preparation
 from recbole_debias.utils import get_model, get_trainer
+from recbole_debias.utils.case_study import full_sort_topk
 
 
-def run_recbole_debias(model=None, dataset=None, config_file_list=None, config_dict=None, saved=True, model_file=None):
+def run_recbole_debias(model=None, model_file=None, dataset=None, config_file_list=None,
+                       config_dict=None, saved=True, to_evaluate=True,
+                       batch_size=None):
     r""" A fast running api, which includes the complete process of
     training and testing a model on a specified dataset
 
@@ -50,27 +55,33 @@ def run_recbole_debias(model=None, dataset=None, config_file_list=None, config_d
     # logger.info(set_color("FLOPs", "blue") + f": {flops}")
 
     # trainer loading and initialization
-    trainer = get_trainer(config['MODEL_TYPE'], config['model'])(config, model)
+    trainer: Trainer = get_trainer(config['MODEL_TYPE'], config['model'])(config, model)
 
     # model training
-    best_valid_score, best_valid_result = "N/A", "N/A"
+    best_valid_score, best_valid_result = None, None
     if model_file is None:
         best_valid_score, best_valid_result = trainer.fit(train_data, valid_data, saved=saved, show_progress=config['show_progress'])
     else:
         # When calculate ItemCoverage metrics, we need to run this code for set item_nums in eval_collector.
         trainer.eval_collector.data_collect(train_data)
 
-    # model evaluation
-    test_result = trainer.evaluate(test_data, load_best_model=saved, model_file=model_file, show_progress=config['show_progress'])
+    if to_evaluate:
+        # model evaluation
+        test_result = trainer.evaluate(test_data, load_best_model=saved, model_file=model_file, show_progress=config['show_progress'])
 
-    logger.info(set_color('best valid ', 'yellow') + f': {best_valid_result}')
-    logger.info(set_color('test result', 'yellow') + f': {test_result}')
+        logger.info(set_color('best valid ', 'yellow') + f': {best_valid_result}')
+        logger.info(set_color('test result', 'yellow') + f': {test_result}')
+        topk_result = None
+    else:
+        test_result = None
+        topk_result = full_predict(model, dataset, config, test_data, batch_size=batch_size)
 
     return {
         'best_valid_score': best_valid_score,
         'valid_score_bigger': config['valid_metric_bigger'],
         'best_valid_result': best_valid_result,
-        'test_result': test_result
+        'test_result': test_result,
+        'topk_result': topk_result
     }
 
 
@@ -136,3 +147,22 @@ def load_data_and_model(model_file):
     model.load_other_parameter(checkpoint.get("other_parameter"))
 
     return config, model, dataset, train_data, valid_data, test_data
+
+
+def full_predict(model, dataset, config, test_data, batch_size=None) -> pd.DataFrame:
+    # uid_series = None
+    # uid_series = dataset.token2id(dataset.uid_field, ["196", "186"])
+    # if uid_series is None:
+    uid_series = torch.arange(1, test_data.dataset.user_num)
+
+    topk_score, topk_iid_list = full_sort_topk(
+        model, test_data, uid_series=uid_series, k=config['topk'][0], device=config["device"], batch_size=batch_size
+    )
+    # print(topk_score)  # scores of top 10 items
+    # print(topk_iid_list)  # internal id of top 10 items
+    external_item_list = dataset.id2token(dataset.iid_field, topk_iid_list.cpu())
+    external_user_list = dataset.id2token(dataset.uid_field, uid_series)
+    topk_result = pd.DataFrame.from_dict(dict(zip(external_user_list, external_item_list))).melt(var_name=dataset.uid_field,
+                                                                                                 value_name=dataset.iid_field)
+    topk_result['score'] = topk_score.cpu().flatten()
+    return topk_result

@@ -55,10 +55,9 @@ def get_trainer(model_type, model_name):
 
 
 def load_pretrained_model(model, model_path):
-
     checkpoint = torch.load(model_path)
     model.load_state_dict(state_dict=checkpoint['state_dict'])
     model.load_other_parameter(checkpoint.get('other_parameter'))
     message_output = 'Loading pretrained model from {}'.format(model_path)
 
-    return model,message_output
+    return model, message_output

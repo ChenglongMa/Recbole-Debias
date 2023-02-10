@@ -4,11 +4,15 @@
 # @Email  : zhangjingsen@ruc.edu.cn
 
 import copy
+
+import recbole.data
 import torch
 
 from recbole.data.dataloader.general_dataloader import TrainDataLoader
 from recbole.data.interaction import Interaction
 from recbole.utils import InputType, FeatureType, FeatureSource
+
+from recbole.utils import ModelType
 
 
 class DebiasDataloader(TrainDataLoader):
@@ -137,3 +141,9 @@ class DICEDataloader(TrainDataLoader):
 
     def get_model(self, model):
         self.model = model
+
+
+class NegSampleEvalDataLoader(recbole.data.NegSampleEvalDataLoader):
+    def __init__(self, config, dataset, sampler, shuffle=False):
+        self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
+        super().__init__(config, dataset, sampler, shuffle)

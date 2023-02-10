@@ -17,27 +17,41 @@ if __name__ == '__main__':
     parser.add_argument('--model', '-m', type=str, default='MF', help='name of models')
     parser.add_argument('--dataset', '-d', type=str, default='ml-100k', help='name of datasets')
     parser.add_argument('--config_files', '-c', type=str, default=None, help='config files')
-    parser.add_argument('--model_file', '-f', type=str, default=None, help='model checkpoint files')
+    parser.add_argument('--model_file', '-f', type=str, default=None, help='model checkpoint file')
+    parser.add_argument('--no-evaluate', '-n', action=argparse.BooleanOptionalAction,
+                        help='DO NOT evaluate but just generate top-k or prediction score')
+    parser.add_argument('--batch_size', '-b', type=int, default=None, help='Batch size for full sort prediction')
 
     args, _ = parser.parse_known_args()
+    to_evaluate = not args.no_evaluate
+    batch_size = args.batch_size
 
     config_file_list = args.config_files.strip().split(' ') if args.config_files else None
     mf = args.model_file
-    if mf.split('-')[0].lower() != args.model.lower():
+    if mf is not None and mf.split('-')[0].lower() != args.model.lower():
         raise TypeError("Checkpoint file does not match model name")
 
     model_file = f"saved/{mf}.pth" if mf is not None else None
     start = time.time()
-    result = run_recbole_debias(model=args.model, dataset=args.dataset, config_file_list=config_file_list, model_file=model_file)
+    result = run_recbole_debias(model=args.model,model_file=model_file,
+                                dataset=args.dataset,config_file_list=config_file_list,
+                                to_evaluate=to_evaluate, batch_size=batch_size)
     elapse = (time.time() - start) / 60  # unit: s
 
-    res = []
-    for metric, value in result['test_result'].items():
-        res.append([args.model, metric, value, elapse])
-    res = pd.DataFrame(res, columns=['model', 'metric', 'value', 'elapse(mins)'])
+    test_result = result['test_result']
+    topk_result = result['topk_result']
+
     os.makedirs('./result/', exist_ok=True)
     now = time.strftime("%y%m%d%H%M%S")
-    res.to_csv(f'./result/result_{now}.csv', index=False)
-    print(res.head())
+    if to_evaluate and isinstance(test_result, dict):
+        res = []
+        for metric, value in test_result.items():
+            res.append([args.model, metric, value, elapse])
+        res = pd.DataFrame(res, columns=['model', 'metric', 'value', 'elapse(mins)'])
+        res.to_csv(f'./result/result_{now}.csv', index=False)
+        print(res.head())
+    if not to_evaluate and isinstance(topk_result, pd.DataFrame):
+        topk_result.to_csv(f'./result/topk_result_{now}.csv', index=False)
+
     # @2302051603: replace extractor with equivalent GRU cell
     # @------1632: again, replace u_inputs with r_inputs

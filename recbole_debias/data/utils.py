@@ -7,15 +7,15 @@ import importlib
 import os
 import pickle
 
-from recbole.data.dataloader import NegSampleEvalDataLoader, FullSortEvalDataLoader
+from recbole.data.dataloader import FullSortEvalDataLoader
 from recbole.data.utils import load_split_dataloaders, save_split_dataloaders, getLogger
+from recbole.sampler import Sampler, RepeatableSampler
 from recbole.utils import set_color
 from recbole.utils.argument_list import dataset_arguments
-from recbole.sampler import Sampler, RepeatableSampler
 
 from recbole_debias.data.dataloader import *
-from recbole_debias.utils import ModelType
 from recbole_debias.sampler import DICESampler
+from recbole_debias.utils import ModelType
 
 
 def create_dataset(config):
@@ -139,7 +139,7 @@ def get_dataloader(config, phase):
         else:
             return TrainDataLoader
     else:
-        eval_mode = config["eval_args"]["mode"]
+        eval_mode = config["eval_args"]["mode"]  # TODO: if add valid_eval_args, we need to guarantee backward compatibility
         if eval_mode == "full":
             return FullSortEvalDataLoader
         else:
@@ -209,3 +209,11 @@ def create_samplers(config, dataset, built_datasets):
         test_sampler = sampler.set_phase('test')
 
     return train_sampler, valid_sampler, test_sampler
+
+
+def split_interaction(interaction: Interaction, batch_size) -> list[Interaction]:
+    length = len(list(interaction.interaction.values())[0])
+    return [
+        Interaction({k: v[i:i + batch_size] for k, v in interaction.interaction.items()})
+        for i in range(0, length, batch_size)
+    ]
