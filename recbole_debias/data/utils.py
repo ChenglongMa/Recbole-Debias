@@ -7,13 +7,14 @@ import importlib
 import os
 import pickle
 
-from recbole.data.dataloader import FullSortEvalDataLoader
+from recbole.data.interaction import Interaction
+from recbole.data.dataloader import TrainDataLoader, FullSortEvalDataLoader
 from recbole.data.utils import load_split_dataloaders, save_split_dataloaders, getLogger
 from recbole.sampler import Sampler, RepeatableSampler
 from recbole.utils import set_color
 from recbole.utils.argument_list import dataset_arguments
 
-from recbole_debias.data.dataloader import *
+from recbole_debias.data.dataloader import NegSampleEvalDataLoader, DebiasDataloader, DICEDataloader
 from recbole_debias.sampler import DICESampler
 from recbole_debias.utils import ModelType
 
