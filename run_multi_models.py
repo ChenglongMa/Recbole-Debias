@@ -21,7 +21,7 @@ if __name__ == '__main__':
     batch_size = args.batch_size
 
     models = args.models
-    mfs = args.model_files
+    mfs = args.model_files or []
     model_and_files = []
     for i in range(len(models)):
         mf = mfs[i] if i < len(mfs) else None
