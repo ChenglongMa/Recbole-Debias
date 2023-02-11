@@ -17,7 +17,13 @@ from recbole.utils import ModelType
 
 DebiasDataloader = TrainDataLoader
 
-class MaskedNegSampleDataLoader(NegSampleDataLoader):
+
+class DICEDataloader(TrainDataLoader):
+
+    def __init__(self, config, dataset, sampler, shuffle=True):
+        super().__init__(config, dataset, sampler, shuffle=shuffle)
+        self.mask_field = config['MASK_FIELD']
+
     def _neg_sampling(self, inter_feat):
         if self.neg_sample_args.get("dynamic", False):
             candidate_num = self.neg_sample_args["candidate_num"]
@@ -39,7 +45,7 @@ class MaskedNegSampleDataLoader(NegSampleDataLoader):
                 indices, [i for i in range(neg_candidate_ids.shape[1])]
             ].view(-1)
             self.model.train()
-            return self._neg_sample_by_pair_wise_sampling(inter_feat, neg_item_ids, mask)
+            return self.sampling_func(inter_feat, neg_item_ids, mask)
         elif (
                 self.neg_sample_args["distribution"] != "none"
                 and self.neg_sample_args["sample_num"] != "none"
@@ -50,9 +56,10 @@ class MaskedNegSampleDataLoader(NegSampleDataLoader):
             neg_item_ids, mask = self._sampler.sample_by_user_ids(
                 user_ids, item_ids, self.neg_sample_num
             )  # 更改
-            return self._neg_sample_by_pair_wise_sampling(inter_feat, neg_item_ids, mask)
+            return self.sampling_func(inter_feat, neg_item_ids, mask)
         else:
             return inter_feat
+
     def _neg_sample_by_pair_wise_sampling(self, inter_feat: Interaction, neg_item_ids, mask):
         inter_feat = inter_feat.repeat(self.times)
         neg_item_feat = Interaction({self.iid_field: neg_item_ids})
@@ -69,65 +76,27 @@ class MaskedNegSampleDataLoader(NegSampleDataLoader):
         new_data = inter_feat.repeat(self.times)
         new_data[self.iid_field][pos_inter_num:] = neg_item_ids
         new_data = self._dataset.join(new_data)
+
         labels = torch.zeros(pos_inter_num * self.times)
         labels[:pos_inter_num] = 1.0
         new_data.update(Interaction({self.label_field: labels}))
+
+        neg_item_mask = torch.zeros(pos_inter_num * self.times, dtype=torch.bool)
+        neg_item_mask[pos_inter_num:] = mask
+        new_data.update(Interaction({self.mask_field: neg_item_mask}))
         return new_data
 
-class DICEDataloader(TrainDataLoader):
 
-    def __init__(self, config, dataset, sampler, shuffle=True):
-        super().__init__(config, dataset, sampler, shuffle=shuffle)
+class NegSampleEvalDataLoader(recbole.data.dataloader.NegSampleEvalDataLoader):
+    def __init__(self, config, dataset, sampler, shuffle=False):
+        self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
+        super().__init__(config, dataset, sampler, shuffle)
+
+
+class DICEEvalDataloader(NegSampleEvalDataLoader):
+    def __init__(self, config, dataset, sampler, shuffle=False):
+        super().__init__(config, dataset, sampler, shuffle)
         self.mask_field = config['MASK_FIELD']
-
-    # def _set_neg_sample_args(self, config, dataset, dl_format, neg_sample_args):
-    #     self.uid_field = dataset.uid_field
-    #     self.iid_field = dataset.iid_field
-    #     self.dl_format = dl_format
-    #     self.neg_sample_args = neg_sample_args
-    #     self.times = 1
-    #     if (
-    #             self.neg_sample_args["distribution"] == "uniform"
-    #             or "popularity"
-    #             and self.neg_sample_args["sample_num"] != "none"
-    #     ):
-    #         self.neg_sample_num = self.neg_sample_args["sample_num"]
-    #
-    #         if self.dl_format == InputType.POINTWISE:
-    #             self.times = 1 + self.neg_sample_num
-    #             self.sampling_func = self._neg_sample_by_point_wise_sampling
-    #
-    #             self.label_field = config["LABEL_FIELD"]
-    #             dataset.set_field_property(
-    #                 self.label_field, FeatureType.FLOAT, FeatureSource.INTERACTION, 1
-    #             )
-    #         elif self.dl_format == InputType.PAIRWISE:
-    #             self.times = self.neg_sample_num
-    #             self.sampling_func = self._neg_sample_by_pair_wise_sampling
-    #
-    #             self.neg_prefix = config["NEG_PREFIX"]
-    #             self.neg_item_id = self.neg_prefix + self.iid_field
-    #
-    #             columns = (
-    #                 [self.iid_field]
-    #                 if dataset.item_feat is None
-    #                 else dataset.item_feat.columns
-    #             )
-    #             for item_feat_col in columns:
-    #                 neg_item_feat_col = self.neg_prefix + item_feat_col
-    #                 dataset.copy_field_property(neg_item_feat_col, item_feat_col)
-    #         else:
-    #             raise ValueError(
-    #                 f"`neg sampling by` with dl_format [{self.dl_format}] not been implemented."
-    #             )
-    #
-    #     elif (
-    #             self.neg_sample_args["distribution"] != "none"
-    #             and self.neg_sample_args["sample_num"] != "none"
-    #     ):
-    #         raise ValueError(
-    #             f'`neg_sample_args` [{self.neg_sample_args["distribution"]}] is not supported!'
-    #         )
 
     def _neg_sampling(self, inter_feat):
         if self.neg_sample_args.get("dynamic", False):
@@ -150,7 +119,7 @@ class DICEDataloader(TrainDataLoader):
                 indices, [i for i in range(neg_candidate_ids.shape[1])]
             ].view(-1)
             self.model.train()
-            return self._neg_sample_by_pair_wise_sampling(inter_feat, neg_item_ids, mask)
+            return self.sampling_func(inter_feat, neg_item_ids, mask)
         elif (
                 self.neg_sample_args["distribution"] != "none"
                 and self.neg_sample_args["sample_num"] != "none"
@@ -161,7 +130,7 @@ class DICEDataloader(TrainDataLoader):
             neg_item_ids, mask = self._sampler.sample_by_user_ids(
                 user_ids, item_ids, self.neg_sample_num
             )  # 更改
-            return self._neg_sample_by_pair_wise_sampling(inter_feat, neg_item_ids, mask)
+            return self.sampling_func(inter_feat, neg_item_ids, mask)
         else:
             return inter_feat
 
@@ -176,20 +145,17 @@ class DICEDataloader(TrainDataLoader):
         inter_feat.update(neg_item_mask)
         return inter_feat
 
-    def _neg_sample_by_point_wise_sampling(self, inter_feat: Interaction, neg_item_ids):
+    def _neg_sample_by_point_wise_sampling(self, inter_feat: Interaction, neg_item_ids, mask):
         pos_inter_num = len(inter_feat)
         new_data = inter_feat.repeat(self.times)
         new_data[self.iid_field][pos_inter_num:] = neg_item_ids
         new_data = self._dataset.join(new_data)
+
         labels = torch.zeros(pos_inter_num * self.times)
         labels[:pos_inter_num] = 1.0
         new_data.update(Interaction({self.label_field: labels}))
+
+        neg_item_mask = torch.zeros(pos_inter_num * self.times, dtype=torch.bool)
+        neg_item_mask[pos_inter_num:] = mask
+        new_data.update(Interaction({self.mask_field: neg_item_mask}))
         return new_data
-
-
-class NegSampleEvalDataLoader(recbole.data.NegSampleEvalDataLoader):
-    def __init__(self, config, dataset, sampler, shuffle=False):
-        self.is_sequential = config["MODEL_TYPE"] == ModelType.SEQUENTIAL
-        super().__init__(config, dataset, sampler, shuffle)
-
-class DICEEvalDataloader(NegSampleEvalDataLoader):
