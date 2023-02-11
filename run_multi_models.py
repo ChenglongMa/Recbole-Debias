@@ -9,7 +9,7 @@ from recbole_debias.quick_start import run_recbole_debias
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--models', '-m', nargs='+', type=str, default=['MF'], help='name of models')
-    parser.add_argument('--dataset', '-d', type=str, default='kwai', help='name of datasets')
+    parser.add_argument('--dataset', '-d', type=str, default='ml-100k', help='name of datasets')
     parser.add_argument('--config_files', '-c', type=str, default=None, help='config files')
     parser.add_argument('--model_files', '-f', nargs='+', type=str, default=None, help='model checkpoint files')
     parser.add_argument('--no-evaluate', '-n', action=argparse.BooleanOptionalAction,
@@ -49,9 +49,9 @@ if __name__ == '__main__':
             if test_result is not None:
                 for metric, value in test_result.items():
                     eval_res.append([model, metric, value, elapse])
-        except:
+        except Exception as e:
             print('Error')
-            pass
+            print(e)
 
     if len(eval_res) > 0:
         eval_res = pd.DataFrame(eval_res, columns=['model', 'metric', 'value', 'elapse(mins)'])

@@ -148,7 +148,7 @@ class DICESampler(AbstractSampler):
             while len(check_list) > 0:
                 value, pop_mask = self.sampling(len(check_list), item_ids_repeat[check_list])  # mcl: added
                 value_ids[check_list] = value
-                pop_mask_ids[check_list] = pop_mask_ids  # TODO: pop_mask?
+                pop_mask_ids[check_list] = pop_mask  # TODO: pop_mask?
                 mask = np.isin(value, used)
                 check_list = check_list[mask]
         else:
@@ -175,10 +175,19 @@ class DICESampler(AbstractSampler):
             sample_list (np.array): a list of samples and the len is [sample_num].
         """
         assert sample_num == len(positive_item_ids), "The number of samples must be equal to the number of positive samples"
+        if self.distribution == "uniform":
+            return self._uni_sampling(sample_num, positive_item_ids)
         if self.distribution == 'popularity':
             return self._pop_sampling(sample_num, positive_item_ids)
         else:
             raise NotImplementedError(f'The sampling distribution [{self.distribution}] is not implemented.')
+
+    def _uni_sampling(self, sample_num, positive_item_ids):
+        if not hasattr(self, 'prob'):
+            self._build_alias_table()
+        final_random_list = np.random.randint(1, self.item_num, sample_num)
+        pop_mask_list = np.array([self.prob[i] for i in positive_item_ids]) >= np.array([self.prob[i] for i in final_random_list])
+        return final_random_list, pop_mask_list
 
     def _pop_sampling(self, sample_num, positive_item_ids):
         """Sample [sample_num] items in the popularity-biased distribution.
@@ -228,6 +237,7 @@ class MaskedSeqSampler(SeqSampler):
 
     def __init__(self, dataset, distribution="uniform", alpha=1.0):
         super().__init__(dataset, distribution, alpha)
+        # mcl: added
         if distribution == "uniform":
             # NOTE: We build alias table regardless of the distribution.
             # We set this `if` condition is because `AbstractSampler` has built alias table for `popularity` distribution

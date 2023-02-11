@@ -7,10 +7,10 @@ alpha: 1.0                      # (float) Weight to balance the interest represe
 
 MASK_FIELD: mask
 
-eval_args:
-  split: { 'LS': 'valid_and_test' }
-  order: TO
-  mode: uni100
+#eval_args:
+#  split: { 'LS': 'valid_and_test' }
+#  order: TO
+#  mode: uni100
 #metrics: [ 'NDCG' ]
 #metrics: [ 'AUC', 'LogLoss' ]
 #valid_metric: AUC
