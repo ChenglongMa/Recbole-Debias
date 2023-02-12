@@ -227,3 +227,4 @@ class H2NETDataset(SequentialDataset):
 
 
 DIENDataset = H2NETDataset
+GRU4RecDataset = H2NETDataset
