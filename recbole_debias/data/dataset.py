@@ -56,7 +56,7 @@ class DebiasDataset(Dataset):
         return pscore_cnt.to(self.device), column
 
 
-class H2NETDataset(SequentialDataset):
+class MaskedSequentialDataset(SequentialDataset):
     """:class:`H2NETDataset` is based on :class:`~recbole.data.dataset.sequential_dataset.SequentialDataset`.
     It is different from :class:`SequentialDataset` in `data_augmentation`.
     It adds users' negative item list to interaction.
@@ -226,5 +226,6 @@ class H2NETDataset(SequentialDataset):
         return super().build()
 
 
-DIENDataset = H2NETDataset
-GRU4RecDataset = H2NETDataset
+H2NETDataset = MaskedSequentialDataset
+DIENDataset = MaskedSequentialDataset
+GRU4RecDataset = MaskedSequentialDataset

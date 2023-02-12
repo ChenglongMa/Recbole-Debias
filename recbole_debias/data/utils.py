@@ -11,7 +11,7 @@ from recbole.data.interaction import Interaction
 from recbole.data.dataloader import TrainDataLoader, FullSortEvalDataLoader
 from recbole.data.utils import load_split_dataloaders, save_split_dataloaders, getLogger, create_dataset as recbole_create_dataset
 from recbole.sampler import Sampler, RepeatableSampler
-from recbole.utils import set_color
+from recbole.utils import set_color, ModelType as RecBoleModelType
 from recbole.utils.argument_list import dataset_arguments
 
 from recbole_debias.data.dataloader import NegSampleEvalDataLoader, DebiasDataloader, DICEDataloader, DICEEvalDataloader
@@ -38,6 +38,7 @@ def create_dataset(config):
         model_type = config['MODEL_TYPE']
         type2class = {
             ModelType.DEBIAS: 'DebiasDataset',
+            RecBoleModelType.SEQUENTIAL: 'MaskedSequentialDataset'
         }
         if model_type in type2class and hasattr(dataset_module, type2class[model_type]):
             dataset_class = getattr(dataset_module, type2class[model_type])

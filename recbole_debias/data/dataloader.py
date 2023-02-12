@@ -8,11 +8,8 @@ import copy
 import recbole.data
 import torch
 from recbole.data.dataloader import NegSampleDataLoader
-
 from recbole.data.dataloader.general_dataloader import TrainDataLoader
 from recbole.data.interaction import Interaction
-from recbole.utils import InputType, FeatureType, FeatureSource
-
 from recbole.utils import ModelType
 
 DebiasDataloader = TrainDataLoader

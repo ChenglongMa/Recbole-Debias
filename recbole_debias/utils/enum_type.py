@@ -11,8 +11,7 @@ class ModelType(Enum):
 
     - ``Debias``: Debiased Recommendation
     """
-
-    DEBIAS = 1
+    DEBIAS = 7
 
 
 

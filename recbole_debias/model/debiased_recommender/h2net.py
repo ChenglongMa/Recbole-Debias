@@ -59,11 +59,11 @@ class H2NET(SequentialRecommender):
         self.soc_weight = config['soc_weight']
         self.adaptive = config['adaptive']
 
-        prefix = 'train' if self.training else 'eval'
-        batch_size = config[f'{prefix}_batch_size']
-        neg_sample_num = config[f'{prefix}_neg_sample_args']['sample_num']
-        # See general_dataloader#_init_batch_size_and_step()#L50
-        self.n_pos_instance = max(batch_size // (1 + neg_sample_num), 1)
+        # prefix = 'train' if self.training else 'eval'
+        # batch_size = config[f'{prefix}_batch_size']
+        # neg_sample_num = config[f'{prefix}_neg_sample_args']['sample_num']
+        # # See general_dataloader#_init_batch_size_and_step()#L50
+        # self.n_pos_instance = max(batch_size // (1 + neg_sample_num), 1)
 
         if self.dis_loss == 'L1':
             self.criterion_discrepancy = nn.L1Loss()
