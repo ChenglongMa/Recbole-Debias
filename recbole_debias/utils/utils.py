@@ -4,6 +4,8 @@
 # @Email  : zhangjingsen@ruc.edu.cn
 
 import importlib
+
+import recbole.utils
 import torch
 
 from recbole_debias.utils.enum_type import ModelType
@@ -31,9 +33,12 @@ def get_model(model_name):
             model_module = importlib.import_module(module_path, __name__)
             break
 
+    # if model_module is None:
+    #     raise ValueError('`model_name` [{}] is not the name of an existing model.'.format(model_name))
     if model_module is None:
-        raise ValueError('`model_name` [{}] is not the name of an existing model.'.format(model_name))
-    model_class = getattr(model_module, model_name)
+        model_class = recbole.utils.get_model(model_name)
+    else:
+        model_class = getattr(model_module, model_name)
     return model_class
 
 

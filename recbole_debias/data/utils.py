@@ -9,7 +9,7 @@ import pickle
 
 from recbole.data.interaction import Interaction
 from recbole.data.dataloader import TrainDataLoader, FullSortEvalDataLoader
-from recbole.data.utils import load_split_dataloaders, save_split_dataloaders, getLogger
+from recbole.data.utils import load_split_dataloaders, save_split_dataloaders, getLogger, create_dataset as recbole_create_dataset
 from recbole.sampler import Sampler, RepeatableSampler
 from recbole.utils import set_color
 from recbole.utils.argument_list import dataset_arguments
@@ -39,7 +39,10 @@ def create_dataset(config):
         type2class = {
             ModelType.DEBIAS: 'DebiasDataset',
         }
-        dataset_class = getattr(dataset_module, type2class[model_type])
+        if model_type in type2class and hasattr(dataset_module, type2class[model_type]):
+            dataset_class = getattr(dataset_module, type2class[model_type])
+        else:
+            return recbole_create_dataset(config)
 
     default_file = os.path.join(config['checkpoint_dir'], f'{config["dataset"]}-{dataset_class.__name__}.pth')
     file = config['dataset_save_path'] or default_file
