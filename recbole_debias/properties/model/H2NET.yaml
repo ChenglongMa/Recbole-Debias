@@ -12,8 +12,6 @@ soc_weight: 0.1
 adaptive: False
 decay: 0.9
 
-MASK_FIELD: mask
-
 eval_args:
   split: { 'LS': 'valid_and_test' }
   order: TO

@@ -5,7 +5,7 @@ pooling_mode: 'mean'            # (str) Pooling mode of sequence data.
 gru_type: 'AUGRU'               # (str) GRU type of Interest Evolving Layer.
 alpha: 1.0                      # (float) Weight to balance the interest representation and CTR prediction.
 
-MASK_FIELD: mask
+
 
 #eval_args:
 #  split: { 'LS': 'valid_and_test' }
