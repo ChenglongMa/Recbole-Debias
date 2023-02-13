@@ -11,7 +11,7 @@ from torch.nn.init import xavier_normal_, xavier_uniform_, constant_
 from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_sequence
 
 from recbole_debias.model.abstract_recommender import DebiasedRecommender
-from recbole_debias.model.layers import AUGRUCell, DebiasedRNN
+from recbole_debias.model.layers import AUGRUCell, DebiasedRNN, DebiasedGRUCell
 
 
 class H2NET(SequentialRecommender):
@@ -98,10 +98,10 @@ class H2NET(SequentialRecommender):
 
         # init interest extractor layer, interest evolving layer embedding layer, MLP layer and linear layer
         self.interest_extractor = InterestExtractorNetwork(
-            item_feat_dim, item_feat_dim, self.interest_mlp_list
+            item_feat_dim // 2, item_feat_dim // 2, self.interest_mlp_list
         )
         self.interest_evolution = InterestEvolvingLayer(
-            mask_mat, item_feat_dim, item_feat_dim, self.att_list, gru=self.gru
+            mask_mat, item_feat_dim // 2, item_feat_dim // 2, self.att_list, gru=self.gru
         )
         self.interest_embedding_layer = ContextSeqEmbLayer(
             dataset, self.embedding_size, self.pooling_mode, self.device
@@ -232,9 +232,7 @@ class H2NET(SequentialRecommender):
         # interest
         pos_item_seq_emb = torch.cat([pos_int_item_seq_emb, pos_soc_item_seq_emb], dim=-1)
         neg_item_seq_emb = torch.cat([neg_int_item_seq_emb, neg_soc_item_seq_emb], dim=-1)
-        interest, aux_loss = self.interest_extractor(
-            pos_item_seq_emb, item_seq_len, neg_item_seq_emb
-        )
+        interest, aux_loss = self.interest_extractor(pos_item_seq_emb, item_seq_len, neg_item_seq_emb)
         target_item_emb = torch.cat([target_int_item_emb, target_soc_item_emb], dim=-1)
         evolution = self.interest_evolution(
             target_item_emb, interest, item_seq_len
@@ -287,6 +285,7 @@ class InterestExtractorNetwork(nn.Module):
 
     def forward(self, keys, keys_length, neg_keys=None):
         batch_size, hist_len, embedding_size = keys.shape
+        int_emb, soc_emd = keys.chunk(2, dim=-1)
         packed_keys = pack_padded_sequence(
             keys, lengths=keys_length.cpu(), batch_first=True, enforce_sorted=False
         )
@@ -294,6 +293,9 @@ class InterestExtractorNetwork(nn.Module):
         rnn_outputs, _ = pad_packed_sequence(
             packed_rnn_outputs, batch_first=True, padding_value=0, total_length=hist_len
         )
+
+        # DEBUG: Try different implements
+        rnn_outputs = torch.cat([rnn_outputs, soc_emd], dim=-1)
 
         aux_loss = self.auxiliary_loss(
             rnn_outputs[:, :-1, :], keys[:, 1:, :], neg_keys[:, 1:, :], keys_length - 1
@@ -388,7 +390,7 @@ class InterestEvolvingLayer(nn.Module):
                 input_size=input_size, hidden_size=rnn_hidden_size, batch_first=True
             )
 
-        elif gru == "AGRU" or gru == "AUGRU":
+        elif gru == "AGRU" or gru == "AUGRU" or gru == "DeGRU":
             self.attention_layer = SequenceAttLayer(
                 mask_mat, att_hidden_size, activation, softmax_stag, True
             )
@@ -447,12 +449,15 @@ class InterestEvolvingLayer(nn.Module):
             _, outputs = self.dynamic_rnn(packed_rnn_outputs)
             outputs = outputs.squeeze(0)
 
-        elif self.gru == "AGRU" or self.gru == "AUGRU":
+        elif self.gru == "AGRU" or self.gru == "AUGRU" or self.gru == "DeGRU":
             att_outputs = self.attention_layer(queries, keys, keys_length).squeeze(1)  # [B, T]
             packed_rnn_outputs = pack_padded_sequence(keys, lengths=keys_length_cpu, batch_first=True, enforce_sorted=False)
             packed_att_outputs = pack_padded_sequence(att_outputs, lengths=keys_length_cpu, batch_first=True, enforce_sorted=False, )
             outputs = self.dynamic_rnn(packed_rnn_outputs, packed_att_outputs)
             outputs, _ = pad_packed_sequence(outputs, batch_first=True, padding_value=0.0, total_length=hist_len)
+            if self.gru == "DeGRU":
+                int_emb, soc_emd = keys.chunk(2, dim=-1)
+                outputs = torch.cat([outputs, soc_emd], dim=-1)
             outputs = self.final_output(outputs, keys_length)  # [B, H]
 
         return outputs
@@ -513,6 +518,8 @@ class DynamicRNN(nn.Module):
             self.rnn = AGRUCell(input_size, hidden_size, bias)
         elif gru == "AUGRU":
             self.rnn = AUGRUCell(input_size, hidden_size, bias)
+        elif gru == "DeGRU":
+            self.rnn = DebiasedGRUCell(input_size, hidden_size, bias)
 
     def forward(self, inputs: PackedSequence, att_scores: PackedSequence = None, hidden_output=None):
         if not isinstance(inputs, PackedSequence) or not isinstance(att_scores, PackedSequence):

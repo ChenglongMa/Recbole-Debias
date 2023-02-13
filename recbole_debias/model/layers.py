@@ -29,23 +29,21 @@ class DebiasedGRUCell(nn.Module):
     def __init__(self, input_size: int, hidden_size: int, use_bias=True) -> None:
         super().__init__()
 
-        input_size = input_size + hidden_size
-        self.reset_gate = nn.Sequential(nn.Linear(input_size, hidden_size, bias=use_bias), nn.Sigmoid())
-        self.update_gate = nn.Sequential(nn.Linear(input_size, hidden_size, bias=use_bias), nn.Sigmoid())
-        self.h_hat_gate = nn.Sequential(nn.Linear(input_size, hidden_size, bias=use_bias), nn.Tanh())
+        # input_size = input_size + hidden_size
+        self.reset_gate = nn.Sequential(nn.Linear(input_size * 2 + hidden_size, hidden_size, bias=use_bias), nn.Sigmoid())
+        self.update_gate = nn.Sequential(nn.Linear(input_size * 2 + hidden_size, hidden_size, bias=use_bias), nn.Sigmoid())
+        self.h_hat_gate = nn.Sequential(nn.Linear(input_size + hidden_size, hidden_size, bias=use_bias), nn.Tanh())
 
     def forward(self, inputs, h_prev, attention_score=None):
-        embedding_size = inputs.size(-1) // 2
+        int_emb, soc_emd = inputs.chunk(2, dim=-1)
         r_inputs = torch.cat([inputs, h_prev], dim=1)
         r = self.reset_gate(r_inputs)
-        u_inputs = r_inputs.clone()
-        # u_inputs[:, range(embedding_size, embedding_size + embedding_size)] = 1
-        u = self.update_gate(u_inputs)
+        u = self.update_gate(r_inputs)
 
-        h_hat = self.h_hat_gate(torch.cat([inputs, r * h_prev], dim=1))
+        h_hat = self.h_hat_gate(torch.cat([int_emb, r * h_prev], dim=1))
         score = attention_score.view(-1, 1) if attention_score is not None else torch.ones(u.size(0), device=u.device)
         u = score * u
-        h_cur = (1. - u) * h_prev + u * h_hat
+        h_cur = (1. - u) * h_hat + u * h_prev
         return h_cur
 
 
