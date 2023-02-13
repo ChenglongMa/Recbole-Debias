@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import PackedSequence
 
+import torch.nn.functional as F
+
 
 class AUGRUCell(nn.Module):
 
@@ -85,3 +87,44 @@ class DebiasedRNN(nn.Module):
             begin += batch
 
         return PackedSequence(outputs, batch_sizes, sorted_indices, unsorted_indices), None  # To match the output signature of nn.GRU
+
+
+# class MultiHeadAttention(nn.Module):
+#     def __init__(self, input_dim, attention_size, num_heads):
+#         super(MultiHeadAttention, self).__init__()
+#         self.input_dim = input_dim
+#         self.attention_size = attention_size
+#         self.num_heads = num_heads
+#
+#         self.query = nn.Linear(input_dim, attention_size * num_heads)
+#         self.key = nn.Linear(input_dim, attention_size * num_heads)
+#         self.value = nn.Linear(input_dim, attention_size * num_heads)
+#
+#     def forward(self, inputs):
+#         # linear projections for the queries, keys, and values
+#         queries = self.query(inputs).view(-1, self.num_heads, self.attention_size).permute(0, 2, 1)
+#         keys = self.key(inputs).view(-1, self.num_heads, self.attention_size).permute(0, 2, 1)
+#         values = self.value(inputs).view(-1, self.num_heads, self.attention_size)
+#
+#         # calculate the attention weights
+#         attention_weights = torch.bmm(queries, keys) / (self.attention_size ** 0.5)
+#         attention_weights = F.softmax(attention_weights, dim=-1)
+#
+#         # calculate the attention-weighted inputs
+#         attention_weighted_inputs = torch.bmm(attention_weights, values)
+#         attention_weighted_inputs = attention_weighted_inputs.view(-1, self.input_dim)
+#
+#         return attention_weighted_inputs
+#
+#
+# class AttentionGRUCell(nn.Module):
+#     def __init__(self, input_dim, hidden_state_size, attention_size, num_heads):
+#         super().__init__()
+#         self.hidden_state_size = hidden_state_size
+#         self.multi_head_attention = MultiHeadAttention(input_dim, attention_size, num_heads)
+#         self.gru = nn.GRUCell(input_dim, hidden_state_size)
+#
+#     def forward(self, inputs, hidden_state):
+#         attention_weighted_inputs = self.multi_head_attention(inputs)
+#         updated_hidden_state = self.gru(attention_weighted_inputs, hidden_state)
+#         return updated_hidden_state

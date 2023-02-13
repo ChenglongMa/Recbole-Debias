@@ -15,7 +15,7 @@ from recbole_debias.model.debiased_recommender.h2net import InterestExtractorNet
 from recbole_debias.model.layers import AUGRUCell, DebiasedRNN
 
 
-class HEAR(SequentialRecommender):
+class HEAT(SequentialRecommender):
     def full_sort_predict(self, interaction):
         r"""full sort prediction function.
                 Given users, calculate the scores between users and all candidate items.
@@ -106,9 +106,7 @@ class HEAR(SequentialRecommender):
             dataset, self.embedding_size, self.pooling_mode, self.device
         )
 
-        self.dnn_mlp_layers = MLPLayers(
-            self.dnn_mlp_list, activation="Dice", dropout=self.dropout_prob, bn=True
-        )
+        self.dnn_mlp_layers = MLPLayers(self.dnn_mlp_list, activation="Dice", dropout=self.dropout_prob, bn=True)
         self.dnn_predict_layer = nn.Linear(self.mlp_hidden_size[-1], 1)
         self.sigmoid = nn.Sigmoid()
         self.loss = nn.BCEWithLogitsLoss()

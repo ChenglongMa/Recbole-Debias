@@ -98,7 +98,7 @@ class H2NET(SequentialRecommender):
 
         # init interest extractor layer, interest evolving layer embedding layer, MLP layer and linear layer
         self.interest_extractor = InterestExtractorNetwork(
-            item_feat_dim, item_feat_dim, self.interest_mlp_list
+            item_feat_dim // 2, item_feat_dim // 2, self.interest_mlp_list
         )
         self.interest_evolution = InterestEvolvingLayer(
             mask_mat, item_feat_dim, item_feat_dim, self.att_list, gru=self.gru
@@ -281,23 +281,27 @@ class InterestExtractorNetwork(nn.Module):
 
     def __init__(self, input_size, hidden_size, mlp_size):
         super().__init__()
-        # self.gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, batch_first=True)
-        self.gru = DebiasedRNN(input_size=input_size, hidden_size=hidden_size, bias=True, gru='DeGRU')
+        self.input_size = input_size
+        self.int_gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, batch_first=True)
+        self.soc_gru = nn.GRU(input_size=input_size, hidden_size=hidden_size, batch_first=True)
+        # self.gru = DebiasedRNN(input_size=input_size, hidden_size=hidden_size, bias=True, gru='DeGRU')
         self.auxiliary_net = MLPLayers(layers=mlp_size, activation="none")
 
     def forward(self, keys, keys_length, neg_keys=None):
         batch_size, hist_len, embedding_size = keys.shape
-        packed_keys = pack_padded_sequence(
-            keys, lengths=keys_length.cpu(), batch_first=True, enforce_sorted=False
-        )
-        packed_rnn_outputs, _ = self.gru(packed_keys)
-        rnn_outputs, _ = pad_packed_sequence(
-            packed_rnn_outputs, batch_first=True, padding_value=0, total_length=hist_len
-        )
+        int_emb, soc_emb = keys.split(self.input_size, dim=-1)
 
-        aux_loss = self.auxiliary_loss(
-            rnn_outputs[:, :-1, :], keys[:, 1:, :], neg_keys[:, 1:, :], keys_length - 1
-        )
+        packed_int = pack_padded_sequence(int_emb, lengths=keys_length.cpu(), batch_first=True, enforce_sorted=False)
+        packed_int_outputs, _ = self.int_gru(packed_int)
+        int_outputs, _ = pad_packed_sequence(packed_int_outputs, batch_first=True, padding_value=0, total_length=hist_len)
+
+        packed_soc = pack_padded_sequence(soc_emb, lengths=keys_length.cpu(), batch_first=True, enforce_sorted=False)
+        packed_soc_outputs, _ = self.soc_gru(packed_soc)
+        soc_outputs, _ = pad_packed_sequence(packed_soc_outputs, batch_first=True, padding_value=0, total_length=hist_len)
+
+        rnn_outputs = torch.cat([int_outputs, soc_outputs], dim=-1)
+
+        aux_loss = self.auxiliary_loss(rnn_outputs[:, :-1, :], keys[:, 1:, :], neg_keys[:, 1:, :], keys_length - 1)
 
         return rnn_outputs, aux_loss
 
