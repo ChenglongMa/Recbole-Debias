@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 
 class DebiasTrainer(Trainer):
-
+    @torch.no_grad()
     def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
         if not eval_data:
             return

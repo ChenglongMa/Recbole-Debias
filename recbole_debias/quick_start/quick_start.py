@@ -2,7 +2,7 @@
 # @Time   : 2022/3/24
 # @Author : Jingsen Zhang
 # @Email  : zhangjingsen@ruc.edu.cn
-
+import gc
 import logging
 from logging import getLogger
 
@@ -34,6 +34,9 @@ def run_recbole_debias(model=None, model_file=None, dataset=None, config_file_li
     config = Config(model=model, dataset=dataset, config_file_list=config_file_list, config_dict=config_dict)
     if config['single_spec']:
         config['device'] = torch.device("cuda") if config['use_gpu'] and torch.cuda.is_available() else torch.device("cpu")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
     init_seed(config['seed'], config['reproducibility'])
     # logger initialization
     init_logger(config)
@@ -149,6 +152,7 @@ def load_data_and_model(model_file):
     return config, model, dataset, train_data, valid_data, test_data
 
 
+@torch.no_grad()
 def full_predict(model, dataset, config, test_data, batch_size=None) -> pd.DataFrame:
     # uid_series = None
     # uid_series = dataset.token2id(dataset.uid_field, ["196", "186"])
@@ -156,7 +160,7 @@ def full_predict(model, dataset, config, test_data, batch_size=None) -> pd.DataF
     uid_series = torch.arange(1, test_data.dataset.user_num)
 
     topk_score, topk_iid_list = full_sort_topk(
-        model, test_data, uid_series=uid_series, k=config['topk'][0], device=config["device"], batch_size=batch_size
+        model, test_data, uid_series=uid_series, k=max(config['topk']), device=config["device"], batch_size=batch_size
     )
     # print(topk_score)  # scores of top 10 items
     # print(topk_iid_list)  # internal id of top 10 items
