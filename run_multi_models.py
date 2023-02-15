@@ -18,6 +18,7 @@ if __name__ == '__main__':
 
     args, _ = parser.parse_known_args()
     to_evaluate = not args.no_evaluate
+    dataset_name = args.dataset
     batch_size = args.batch_size
 
     models = args.models
@@ -39,13 +40,13 @@ if __name__ == '__main__':
         start = time.time()
         try:
             result = run_recbole_debias(model=model, model_file=model_file,
-                                        dataset=args.dataset, config_file_list=config_file_list,
+                                        dataset=dataset_name, config_file_list=config_file_list,
                                         to_evaluate=to_evaluate, batch_size=batch_size)
             elapse = (time.time() - start) / 60  # unit: s
             test_result = result['test_result']
             topk_result = result['topk_result']
             if topk_result is not None:
-                topk_result.to_csv(f'./result/topk_result_for_{model}_{now}.csv', index=False)
+                topk_result.to_csv(f'./result/topk_result_for_{model}_{dataset_name}_{now}.csv', index=False)
             if test_result is not None:
                 for metric, value in test_result.items():
                     eval_res.append([model, metric, value, elapse])
@@ -55,6 +56,6 @@ if __name__ == '__main__':
 
     if len(eval_res) > 0:
         eval_res = pd.DataFrame(eval_res, columns=['model', 'metric', 'value', 'elapse(mins)'])
-        eval_res.to_csv(f'./result/result_{now}.csv', index=False)
+        eval_res.to_csv(f'./result/result_{dataset_name}_{now}.csv', index=False)
         print(eval_res.head())
     print('Done')

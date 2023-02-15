@@ -91,6 +91,10 @@ class NegSampleEvalDataLoader(recbole.data.dataloader.NegSampleEvalDataLoader):
 
 
 class DICEEvalDataloader(NegSampleEvalDataLoader):
+    """
+    Duplicate of DICEDataloader
+    """
+
     def __init__(self, config, dataset, sampler, shuffle=False):
         super().__init__(config, dataset, sampler, shuffle)
         self.mask_field = config['MASK_FIELD']

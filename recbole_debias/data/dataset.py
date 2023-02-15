@@ -210,11 +210,6 @@ class MaskedSequentialDataset(SequentialDataset):
                 self.copy(self.inter_feat[start:end])
                 for start, end in zip([0] + cumsum[:-1], cumsum)
             ]
-
-            # mcl: save
-            for dataset in datasets:
-                df = pd.DataFrame(dataset.inter_feat)
-            # end save
             return datasets
 
         ordering_args = self.config["eval_args"]["order"]

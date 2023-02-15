@@ -7,7 +7,6 @@ import os
 import time
 
 import pandas as pd
-import torch
 
 from recbole_debias.quick_start import run_recbole_debias
 
@@ -25,6 +24,8 @@ if __name__ == '__main__':
     args, _ = parser.parse_known_args()
     to_evaluate = not args.no_evaluate
     batch_size = args.batch_size
+    model = args.model
+    dataset = args.dataset
 
     config_file_list = args.config_files.strip().split(' ') if args.config_files else None
     mf = args.model_file
@@ -33,8 +34,8 @@ if __name__ == '__main__':
 
     model_file = f"saved/{mf}.pth" if mf is not None else None
     start = time.time()
-    result = run_recbole_debias(model=args.model,model_file=model_file,
-                                dataset=args.dataset,config_file_list=config_file_list,
+    result = run_recbole_debias(model=model, model_file=model_file,
+                                dataset=dataset, config_file_list=config_file_list,
                                 to_evaluate=to_evaluate, batch_size=batch_size)
     elapse = (time.time() - start) / 60  # unit: s
 
@@ -43,15 +44,15 @@ if __name__ == '__main__':
 
     os.makedirs('./result/', exist_ok=True)
     now = time.strftime("%y%m%d%H%M%S")
-    if to_evaluate and isinstance(test_result, dict):
+    if isinstance(test_result, dict):
         res = []
         for metric, value in test_result.items():
-            res.append([args.model, metric, value, elapse])
+            res.append([model, metric, value, elapse])
         res = pd.DataFrame(res, columns=['model', 'metric', 'value', 'elapse(mins)'])
-        res.to_csv(f'./result/result_{now}.csv', index=False)
+        res.to_csv(f'./result/result_{model}_{dataset}_{now}.csv', index=False)
         print(res.head())
-    if not to_evaluate and isinstance(topk_result, pd.DataFrame):
-        topk_result.to_csv(f'./result/topk_result_{now}.csv', index=False)
+    if isinstance(topk_result, pd.DataFrame):
+        topk_result.to_csv(f'./result/topk_{model}_{dataset}_{now}.csv', index=False)
 
     # @2302051603: replace extractor with equivalent GRU cell
     # @------1632: again, replace u_inputs with r_inputs

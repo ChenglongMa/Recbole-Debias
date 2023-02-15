@@ -2,13 +2,107 @@
 # @Time   : 2022/3/24
 # @Author : Jingsen Zhang
 # @Email  : zhangjingsen@ruc.edu.cn
+import os
+from collections import defaultdict
+from time import time, strftime
 
-from time import time
-
+import numpy as np
+import pandas as pd
+import torch
+from recbole.data.dataloader import FullSortEvalDataLoader
 from recbole.trainer import Trainer
-from recbole.utils import early_stopping, dict2str, set_color
+from recbole.utils import early_stopping, dict2str, set_color, EvaluatorType, get_gpu_usage
+from tqdm import tqdm
 
-DebiasTrainer = Trainer
+
+class DebiasTrainer(Trainer):
+
+    def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
+        if not eval_data:
+            return
+
+        if load_best_model:
+            checkpoint_file = model_file or self.saved_model_file
+            checkpoint = torch.load(checkpoint_file, map_location=self.device)
+            self.model.load_state_dict(checkpoint["state_dict"])
+            self.model.load_other_parameter(checkpoint.get("other_parameter"))
+            message_output = "Loading model structure and parameters from {}".format(
+                checkpoint_file
+            )
+            self.logger.info(message_output)
+
+        self.model.eval()
+
+        if isinstance(eval_data, FullSortEvalDataLoader):
+            eval_func = self._full_sort_batch_eval
+            if self.item_tensor is None:
+                self.item_tensor = eval_data.dataset.get_item_feature().to(self.device)
+        else:
+            eval_func = self._neg_sample_batch_eval
+        if self.config["eval_type"] == EvaluatorType.RANKING:
+            self.tot_item_num = eval_data.dataset.item_num
+
+        iter_data = (
+            tqdm(
+                eval_data,
+                total=len(eval_data),
+                ncols=100,
+                desc=set_color(f"Evaluate   ", "pink"),
+            )
+            if show_progress
+            else eval_data
+        )
+
+        num_sample = 0
+        topk = max(self.config["topk"])
+        topk_results = defaultdict(list)
+        eval_dataset = eval_data.dataset
+        dataset_name = eval_dataset.dataset_name
+        uid_field, iid_field, score_field = eval_dataset.uid_field, eval_dataset.iid_field, 'score'
+        phase = eval_data._sampler.phase
+
+        for batch_idx, batched_data in enumerate(iter_data):
+            num_sample += len(batched_data)
+            interaction, scores, positive_u, positive_i = eval_func(batched_data)
+
+            # mcl: added
+            if phase == 'test':
+                topk_scores, topk_idx = torch.topk(
+                    scores, topk, dim=-1
+                )  # n_users x k
+                user_ids, indices = np.unique(interaction[uid_field], return_index=True)
+                user_ids = user_ids[indices.argsort()].repeat(topk)
+
+                topk_results[uid_field] += user_ids.tolist()
+                topk_results[iid_field] += topk_idx.cpu().detach().flatten().tolist()
+                topk_results[score_field] += topk_scores.cpu().detach().flatten().tolist()
+            # end of mcl
+
+            if self.gpu_available and show_progress:
+                iter_data.set_postfix_str(
+                    set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow")
+                )
+            self.eval_collector.eval_batch_collect(
+                scores, interaction, positive_u, positive_i
+            )
+
+        # mcl: add topk result
+        if phase == 'test':
+            topk_results[uid_field] = eval_dataset.id2token(eval_dataset.uid_field, topk_results[uid_field])
+            topk_results[iid_field] = eval_dataset.id2token(eval_dataset.iid_field, topk_results[iid_field])
+            topk_results = pd.DataFrame(topk_results)
+            now = strftime("%y%m%d%H%M%S")
+            filename = os.path.join(self.config['result_dir'], f'topk_{self.config["model"]}_{dataset_name}_{now}.csv')
+            topk_results.to_csv(filename, index=False)
+        # mcl: add topk result
+
+        self.eval_collector.model_collect(self.model)
+        struct = self.eval_collector.get_data_struct()
+        result = self.evaluator.evaluate(struct)
+        if not self.config["single_spec"]:
+            result = self._map_reduce(result, num_sample)
+        self.wandblogger.log_eval_metrics(result, head="eval")
+        return result
 
 
 class DICETrainer(DebiasTrainer):
