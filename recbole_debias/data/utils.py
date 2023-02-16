@@ -7,6 +7,7 @@ import importlib
 import os
 import pickle
 
+import pandas as pd
 from recbole.data.interaction import Interaction
 from recbole.data.dataloader import TrainDataLoader, FullSortEvalDataLoader
 from recbole.data.utils import load_split_dataloaders, save_split_dataloaders, getLogger, create_dataset as recbole_create_dataset
@@ -222,3 +223,8 @@ def split_interaction(interaction: Interaction, batch_size) -> list[Interaction]
         Interaction({k: v[i:i + batch_size] for k, v in interaction.interaction.items()})
         for i in range(0, length, batch_size)
     ]
+
+
+def dataset_augment(train_set: pd.DataFrame, valid_set: pd.DataFrame, test_set: pd.DataFrame, uir_columns: (str, str, str)):
+
+    ...

@@ -91,6 +91,25 @@ def full_sort_scores(model, test_data, uid_series=None, device=None, batch_size=
     return scores
 
 
+def _spilt_predict(interaction, batch_size):
+    spilt_interaction = dict()
+    for key, tensor in interaction.interaction.items():
+        spilt_interaction[key] = tensor.split(self.test_batch_size, dim=0)
+    num_block = (batch_size + self.test_batch_size - 1) // self.test_batch_size
+    result_list = []
+    for i in range(num_block):
+        current_interaction = dict()
+        for key, spilt_tensor in spilt_interaction.items():
+            current_interaction[key] = spilt_tensor[i]
+        result = self.model.predict(
+            Interaction(current_interaction).to(self.device)
+        )
+        if len(result.shape) == 0:
+            result = result.unsqueeze(0)
+        result_list.append(result)
+    return torch.cat(result_list, dim=0)
+
+
 def full_sort_topk(model, test_data, uid_series=None, k=10, device=None, batch_size=None):
     """Calculate the top-k items' scores and ids for each user in uid_series.
 

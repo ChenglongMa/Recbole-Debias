@@ -132,10 +132,8 @@ dmypy.json
 log_tensorboard/
 log/
 saved/
-dataset/
+/dataset
 result/
 run_hyperParams.py
-neumf.py
-NeuMF.yaml
 .idea
 .DS_Store

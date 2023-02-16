@@ -2,6 +2,8 @@
 # @Time   : 2022/4/9
 # @Author : Jingsen Zhang
 # @Email  : zhangjingsen@ruc.edu.cn
+from collections import defaultdict
+
 import numpy as np
 import pandas as pd
 import torch
@@ -205,11 +207,23 @@ class MaskedSequentialDataset(SequentialDataset):
         """
         if self.benchmark_filename_list is not None:
             self._drop_unused_col()
-            cumsum = list(np.cumsum(self.file_size_list))
-            datasets = [
-                self.copy(self.inter_feat[start:end])
-                for start, end in zip([0] + cumsum[:-1], cumsum)
-            ]
+            phase_field = self.config['PHASE_FIELD']
+            if phase_field is None:
+                cumsum = list(np.cumsum(self.file_size_list))
+                datasets = [
+                    self.copy(self.inter_feat[start:end])
+                    for start, end in zip([0] + cumsum[:-1], cumsum)
+                ]
+                return datasets
+            phase_index = defaultdict(list)
+            phase_train = self.config['PHASE_TRAIN'] or 'train'
+            phase_valid = self.config['PHASE_VALID'] or 'valid'
+            phase_test = self.config['PHASE_TEST'] or 'test'
+
+            for i, phase in enumerate(self.inter_feat[phase_field].numpy()):
+                phase_index[self.field2id_token[phase_field][phase]].append(i)
+
+            datasets = [self.copy(self.inter_feat[phase_index[key]]) for key in [phase_train, phase_valid, phase_test]]
             return datasets
 
         ordering_args = self.config["eval_args"]["order"]
