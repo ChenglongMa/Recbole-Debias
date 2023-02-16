@@ -9,6 +9,9 @@ import time
 import pandas as pd
 
 from recbole_debias.quick_start import run_recbole_debias
+import torch.multiprocessing
+
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 if __name__ == '__main__':
     # torch.autograd.set_detect_anomaly(True)
