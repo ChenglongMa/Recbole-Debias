@@ -12,6 +12,7 @@ from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_
 
 from recbole_debias.model.abstract_recommender import DebiasedRecommender
 from recbole_debias.model.layers import AUGRUCell, DebiasedRNN
+from recbole_debias.model.utils import length2mask
 
 
 class H2NET(SequentialRecommender):
@@ -163,14 +164,15 @@ class H2NET(SequentialRecommender):
         # pos_item_emb = torch.cat((pos_item_seq_emb, target_item_emb.unsqueeze(dim=1)), dim=1).flatten(end_dim=-2)
         # neg_item_emb = torch.cat((neg_item_seq_emb, target_item_emb.unsqueeze(dim=1)), dim=1).flatten(end_dim=-2)
         # TODO: change max_len to exact length of valid embedding, may not necessary
-        repeats = pos_item_seq_emb.size(1)
-        # repeats = item_seq_len
+        # repeats = pos_item_seq_emb.size(1)
+        repeats = item_seq_len
+        mask = length2mask(repeats, max_len=pos_item_seq_emb.size(1))
         # a.repeat_interleave(torch.tensor([2, 3], device=a.device), dim=0)
         # Repeat user embedding to be the same shape of item_seq_emb
         user_emb = user_emb.repeat_interleave(repeats, dim=0)
         # Size: [batch_size * max_len, embedding_size]
-        pos_item_emb = pos_item_seq_emb.flatten(end_dim=-2)
-        neg_item_emb = neg_item_seq_emb.flatten(end_dim=-2)
+        pos_item_emb = pos_item_seq_emb[mask]
+        neg_item_emb = neg_item_seq_emb[mask]
 
         # Size: [batch_size * (max_seq_len + 1)]
         # pos_score = torch.mul(user_emb.unsqueeze(dim=1).expand_as(pos_item_seq_emb), pos_item_seq_emb).sum(dim=-1)
@@ -208,7 +210,7 @@ class H2NET(SequentialRecommender):
         return user_feat_list, item_feat_list, neg_item_feat_list, target_item_feat_emb
 
     def forward(self, user, item_seq, neg_item_seq, neg_item_mask_seq, item_seq_len, next_items):
-        neg_item_mask = neg_item_mask_seq.flatten()
+        neg_item_mask = neg_item_mask_seq[length2mask(item_seq_len, max_len=neg_item_mask_seq.size(1))]
 
         # Interest embedding
         int_user_emb, pos_int_item_seq_emb, neg_int_item_seq_emb, target_int_item_emb \
