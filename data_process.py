@@ -13,10 +13,14 @@ import math
 import os
 
 dir_name = './dataset'
-os.makedirs(f'{dir_name}/ml1m', exist_ok=True)
+dataset_name = 'yelp'
+filename = 'yelp20_21_10core.csv'
+sep = ','
 
-df = pd.read_csv(f'{dir_name}/ml1m/ratings.dat',
-                 names='user_id:token item_id:token rating:float timestamp:float'.split(), sep='::')
+os.makedirs(f'{dir_name}/{dataset_name}', exist_ok=True)
+
+df = pd.read_csv(f'{dir_name}/{dataset_name}/{filename}',
+                 names='user_id:token item_id:token rating:float timestamp:float'.split(), sep=sep)
 
 
 def process_split_ratio(ratio: Union[float, list, tuple]) -> list:
@@ -55,7 +59,8 @@ def split_by_ratios(data: pd.DataFrame, ratios: Union[list, tuple], shuffle=Fals
     """
     split_index = np.cumsum(ratios).tolist()[:-1]
     if shuffle and order_by:
-        raise ValueError('"shuffle" cannot be True when "order_by" is specified.')
+        raise ValueError(
+            '"shuffle" cannot be True when "order_by" is specified.')
     if shuffle:
         data = data.sample(frac=1, random_state=seed)
     if order_by:
@@ -90,34 +95,42 @@ def split_data(full_data: pd.DataFrame, by: str = None, order_by=None,
 
     if by is None:
         # split the data randomly
-        splits = split_by_ratios(full_data, ratios, shuffle=order_by is None, order_by=order_by, seed=seed)
+        splits = split_by_ratios(
+            full_data, ratios, shuffle=order_by is None, order_by=order_by, seed=seed)
     else:
         if order_by is None:
-            full_data['random'] = np.random.default_rng(seed).random(size=full_data.shape[0])
+            full_data['random'] = np.random.default_rng(
+                seed).random(size=full_data.shape[0])
             order_by = 'random'
         groups = full_data.groupby(by=by)
-        rank = groups[order_by].rank(method='dense', pct=True, ascending=ascending)
+        rank = groups[order_by].rank(
+            method='dense', pct=True, ascending=ascending)
         split_index = [0] + np.cumsum(ratios).tolist()
         if 'random' in full_data.columns:
             full_data = full_data.drop('random', axis=1)
-        splits = [full_data[rank.between(split_index[x - 1], split_index[x])].copy() for x in range(1, len(split_index))]
+        splits = [full_data[rank.between(
+            split_index[x - 1], split_index[x])].copy() for x in range(1, len(split_index))]
     return splits
 
 
 # In[15]:
 
 
-ml1m_tr, ml1m_va, ml1m_te = split_data(df, by='user_id:token', order_by='timestamp:float', ratio=[0.8, 0.1, 0.1])
-ml1m_tr['phase:token'] = 'train'
-print(ml1m_tr.shape)
-ml1m_va['phase:token'] = 'valid'
-print(ml1m_va.shape)
-ml1m_te['phase:token'] = 'test'
-print(ml1m_te.shape)
+df_tr, df_va, df_te = split_data(
+    df, by='user_id:token', order_by='timestamp:float', ratio=[0.8, 0.1, 0.1])
+df_tr['phase:token'] = 'train'
+print(df_tr.shape)
+df_va['phase:token'] = 'valid'
+print(df_va.shape)
+df_te['phase:token'] = 'test'
+print(df_te.shape)
 
-ml1m_tr.to_csv(f'{dir_name}/ml1m/ml1m.train.inter', index=False)
-ml1m_va.to_csv(f'{dir_name}/ml1m/ml1m.valid.inter', index=False)
-ml1m_te.to_csv(f'{dir_name}/ml1m/ml1m.test.inter', index=False)
+df_tr.to_csv(
+    f'{dir_name}/{dataset_name}/{dataset_name}.train.inter', index=False)
+df_va.to_csv(
+    f'{dir_name}/{dataset_name}/{dataset_name}.valid.inter', index=False)
+df_te.to_csv(
+    f'{dir_name}/{dataset_name}/{dataset_name}.test.inter', index=False)
 
 # In[25]:
 
