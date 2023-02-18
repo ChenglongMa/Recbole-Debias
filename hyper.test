@@ -1,0 +1,6 @@
+embedding_size choice [10,20,64,128]
+dropout_prob choice [0.0,0.1,0.5]
+dis_loss choice ['L1','L2','dcor']
+dis_pen choice [0.01,0.1]
+int_weight choice [0.1,0.01]
+soc_weight choice [0.1,0.01]
