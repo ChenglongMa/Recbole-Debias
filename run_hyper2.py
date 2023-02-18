@@ -13,7 +13,7 @@ import os
 import numpy as np
 
 from recbole.trainer import HyperTuning
-from recbole_debias.quick_start import objective_function
+from recbole.quick_start import objective_function
 import ray
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--display_file", type=str, default=None, help="visualization file"
     )
-    parser.add_argument("--tool", type=str, default="Ray", help="tuning tool")
+    parser.add_argument("--tool", type=str, default="Hyperopt", help="tuning tool")
     args, _ = parser.parse_known_args()
 
     if args.tool == "Hyperopt":
