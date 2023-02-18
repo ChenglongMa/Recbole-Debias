@@ -4,8 +4,8 @@
 1. Added `decay` config
 
 [Dataset](./recbole_debias/data/dataset.py)
-1. `H2NET`: new `data_augmentation` function;
-2. `H2NET`: no change;
+1. `TICEN`: new `data_augmentation` function;
+2. `TICEN`: no change;
 3. `DICE`: `DebiasDataset`, no change;
 
 [Dataloader](./recbole_debias/data/dataloader.py)

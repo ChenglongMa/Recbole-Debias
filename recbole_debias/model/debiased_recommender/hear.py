@@ -11,7 +11,7 @@ from torch.nn.init import xavier_normal_, xavier_uniform_, constant_
 from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_sequence
 
 from recbole_debias.model.abstract_recommender import DebiasedRecommender
-from recbole_debias.model.debiased_recommender.h2net import InterestExtractorNetwork
+from recbole_debias.model.debiased_recommender.ticen import InterestExtractorNetwork
 from recbole_debias.model.layers import AUGRUCell, DebiasedRNN
 
 

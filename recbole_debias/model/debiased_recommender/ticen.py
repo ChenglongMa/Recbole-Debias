@@ -15,8 +15,8 @@ from recbole_debias.model.layers import AUGRUCell, DebiasedRNN
 from recbole_debias.model.utils import length2mask
 
 
-class H2NET(SequentialRecommender):
-    """H2NET has an interest extractor layer to capture temporal interests from history behavior sequence,and an
+class TICEN(SequentialRecommender):
+    """TICEN has an interest extractor layer to capture temporal interests from history behavior sequence,and an
     interest evolving layer to capture interest evolving process that is relative to the target item. At interest
     evolving layer, attention mechanism is embedded into the sequential structure novelly, and the effects of relative
     interests are strengthened during interest evolution.
@@ -277,7 +277,7 @@ class H2NET(SequentialRecommender):
 
 class InterestExtractorNetwork(nn.Module):
     """In e-commerce system, user behavior is the carrier of latent interest, and interest will change after
-    user takes one behavior. At the interest extractor layer, H2NET extracts series of interest states from
+    user takes one behavior. At the interest extractor layer, TICEN extracts series of interest states from
     sequential user behaviors.
     """
 

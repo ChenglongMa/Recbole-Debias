@@ -59,13 +59,13 @@ class DebiasDataset(Dataset):
 
 
 class MaskedSequentialDataset(SequentialDataset):
-    """:class:`H2NETDataset` is based on :class:`~recbole.data.dataset.sequential_dataset.SequentialDataset`.
+    """:class:`MaskedSequentialDataset` is based on :class:`~recbole.data.dataset.sequential_dataset.SequentialDataset`.
     It is different from :class:`SequentialDataset` in `data_augmentation`.
     It adds users' negative item list to interaction.
 
     The original version of sampling negative item list is implemented by Zhichao Feng (fzcbupt@gmail.com) in 2021/2/25,
     and he updated the codes in 2021/3/19. In 2021/7/9, Yupeng refactored SequentialDataset & SequentialDataLoader,
-    then refactored H2NETDataset, either.
+    then refactored MaskedSequentialDataset, either.
 
     Attributes:
         augmentation (bool): Whether the interactions should be augmented in RecBole.
@@ -166,14 +166,14 @@ class MaskedSequentialDataset(SequentialDataset):
                         and field in self.config["numerical_features"]
                 ):
                     shape += (2,)
-                # H2NET
+                # TICEN
                 list_ftype = self.field2type[list_field]
                 dtype = (
                     torch.int64
                     if list_ftype in [FeatureType.TOKEN, FeatureType.TOKEN_SEQ]
                     else torch.float64
                 )
-                # End H2NET
+                # End TICEN
                 new_dict[list_field] = torch.zeros(shape, dtype=dtype)
 
                 value = self.inter_feat[field]
@@ -182,14 +182,14 @@ class MaskedSequentialDataset(SequentialDataset):
                 ):
                     new_dict[list_field][i][:length] = value[index]
 
-                # H2NET
+                # TICEN
                 if field == self.iid_field:
                     new_dict[self.neg_item_list_field] = torch.zeros(shape, dtype=dtype)
                     new_dict[self.mask_field] = torch.zeros(shape, dtype=torch.bool)
                     for i, (index, length) in enumerate(zip(item_list_index, item_list_length)):
                         new_dict[self.neg_item_list_field][i][:length] = neg_item_list[index]
                         new_dict[self.mask_field][i][:length] = neg_item_masks[index]
-                # End H2NET
+                # End TICEN
 
         new_data.update(Interaction(new_dict))
         self.inter_feat = new_data
@@ -235,6 +235,6 @@ class MaskedSequentialDataset(SequentialDataset):
         return super().build()
 
 
-H2NETDataset = MaskedSequentialDataset
+TICENDataset = MaskedSequentialDataset
 DIENDataset = MaskedSequentialDataset
 GRU4RecDataset = MaskedSequentialDataset

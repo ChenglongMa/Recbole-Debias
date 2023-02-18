@@ -17,7 +17,7 @@ from recbole_debias.quick_start import load_data_and_model
 
 if __name__ == "__main__":
     config, model, dataset, train_data, valid_data, test_data = load_data_and_model(
-        model_file="./saved/H2NET-Feb-06-2023_12-12-53.pth",
+        model_file="./saved/TICEN-Feb-06-2023_12-12-53.pth",
         # model_file="./saved/MF-Feb-07-2023_02-37-32.pth",
     )  # Here you can replace it by your model path.
 
