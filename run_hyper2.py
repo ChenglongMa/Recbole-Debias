@@ -12,8 +12,8 @@ import argparse
 import os
 import numpy as np
 
-from recbole.trainer import HyperTuning
-from recbole.quick_start import objective_function
+from recbole.trainer.hyper_tuning import HyperTuning
+from recbole_debias.quick_start import objective_function
 import ray
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
